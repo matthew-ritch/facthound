@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import RegexValidator
 
+
 class Thread(models.Model):
     topic = models.CharField(max_length=1000)
     dt = models.DateTimeField()
@@ -28,7 +29,7 @@ class Question(models.Model):
             ("RS", "Resolved"),
             ("CA", "Canceled"),
         ],
-        max_length=100
+        max_length=100,
     )
 
 
@@ -55,7 +56,7 @@ class Answer(models.Model):
             ("CE", "Certified"),
             ("PO", "Paid Out"),
         ],
-        max_length=100
+        max_length=100,
     )
 
 
