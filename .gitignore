@@ -2,3 +2,8 @@
 notes.txt
 todo.txt
 .DS_Store
+.vscode/*
+
+fh
+
+db.sqlite3
