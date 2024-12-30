@@ -40,7 +40,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "questions.apps.QuestionsConfig",
+    "siweauth.apps.SiweauthConfig",
     "rest_framework",
+    "rest_framework_simplejwt",
 ]
 
 MIDDLEWARE = [
@@ -125,3 +127,16 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# rest framework options
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+# SIWE
+
+AUTH_USER_MODEL = "siweauth.Wallet"
+AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend', "siweauth.backend.SiweBackend"]
