@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from models import Thread, Post, Question, Answer, Tag
+from questions.models import Thread, Post, Question, Answer, Tag
 
 class ThreadSerializer(serializers.ModelSerializer):
     class Meta:
