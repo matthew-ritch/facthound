@@ -7,6 +7,8 @@ from eth_account.datastructures import SignedMessage
 
 from siweauth.models import Nonce, Wallet
 
+from hexbytes import HexBytes
+
 w3 = Web3()
 
 
@@ -29,10 +31,12 @@ class SiweBackend(BaseBackend):
     Authenticate via siwe
     """
 
-    def authenticate(self, request, message: SignableMessage = None, signed_message: SignedMessage = None):
+    def authenticate(self, request, message: SignableMessage = None, signed_message = None):
         # request must have nonce, address, message fields
         if None in [message, signed_message]:
             return None
+        message = SignableMessage(*[x.encode() if type(x) == str else x for x in message])
+        signed_message = SignedMessage(*signed_message)
         # check for format
         # TODO make sure message ends in timestamp and nonce
         if type(message.body) != str:
@@ -47,7 +51,7 @@ class SiweBackend(BaseBackend):
         # recover address from nonce / signed message
         address = body.split("\n")[1]
         recovered_address = w3.eth.account.recover_message(
-            signable_message=message, signature=signed_message.signature
+            signable_message=message, signature=HexBytes(signed_message.signature)
         )
         # make sure recovered address is correct
         if address != recovered_address:

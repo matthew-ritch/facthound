@@ -29,10 +29,4 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
 
         self.user = authenticate(**authenticate_kwargs)
 
-        if not api_settings.USER_AUTHENTICATION_RULE(self.user):
-            raise exceptions.AuthenticationFailed(
-                self.error_messages["no_active_account"],
-                "no_active_account",
-            )
-
         return {}
