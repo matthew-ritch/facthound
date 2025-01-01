@@ -6,9 +6,10 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 from rest_framework import viewsets
 
-from questions.models import Thread, Post, Question, Answer, Tag
 from siweauth.models import Wallet, Nonce
+from siweauth.auth import IsAdminOrReadOnly
 
+from questions.models import Thread, Post, Question, Answer, Tag
 from questions.serializers import (
     ThreadSerializer,
     PostSerializer,
@@ -16,10 +17,12 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
-from siweauth.siwe import IsAdminOrReadOnly
 
 
-# viewsets for simple crud. 
+
+
+# viewsets for simple crud.
+
 
 class ThreadViewSet(viewsets.ModelViewSet):
     """

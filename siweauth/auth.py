@@ -1,14 +1,17 @@
 from functools import wraps
 import datetime, pytz
 from web3 import Web3, EthereumTesterProvider
-
+from hexbytes import HexBytes
+from eth_account.messages import SignableMessage
+from eth_account.datastructures import SignedMessage
+from eth_keys.exceptions import BadSignature
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.http import JsonResponse
 from rest_framework import permissions
 
 from siweauth.models import Nonce, Wallet
 
-
+w3 = Web3()
 
 def _nonce_is_valid(nonce: str) -> bool:
     """
@@ -16,11 +19,12 @@ def _nonce_is_valid(nonce: str) -> bool:
     :param nonce: The nonce string to validate.
     :return: True if valid else False.
     """
-    n = Nonce.objects.get(value=nonce)
+    n = Nonce.objects.filter(value=nonce).first()
     is_valid = False
-    if n is not None and n.expiration > datetime.datetime.now(tz=pytz.UTC):
-        is_valid = True
-    n.delete()
+    if n is not None: 
+        if n.expiration > datetime.datetime.now(tz=pytz.UTC):
+            is_valid = True
+        n.delete()
     return is_valid
 
 
@@ -43,29 +47,34 @@ def request_passes_test(test_func, fail_message):
     return decorator
 
 
-def check_for_siwe(request):
-        # request must have nonce, address, message fields
-        address = request.GET.get("address") or request.POST.get("address")
-        message = request.GET.get("message") or request.POST.get("message")
-        signed_message = request.GET.get("signed_message") or request.POST.get(
-            "signed_message"
+def check_for_siwe(message, signed_message):
+    message = SignableMessage(
+        *[x.encode() if type(x) == str else x for x in message]
+    )
+    signed_message = SignedMessage(*signed_message)
+    # check for format
+    # TODO make sure message ends in timestamp and nonce
+    if type(message.body) != str:
+        body = str(message.body.decode())
+    else:
+        body = message.body
+    len(body.split("\n")) >= 7
+    # check for nonce in db
+    nonce = body.split("\n")[-3][7:]  # char 7 and on from second to last line
+    if not _nonce_is_valid(nonce):
+        return None
+    # recover address from nonce / signed message
+    address = body.split("\n")[1]
+    try:
+        recovered_address = w3.eth.account.recover_message(
+            signable_message=message, signature=HexBytes(signed_message.signature)
         )
-        if None in [address, message, signed_message]:
-            return False
-        # check for format
-        # TODO make sure message ends in timestamp and nonce
-        len(message.split("\n")) >= 7
-        # check for nonce in db
-        nonce = message.split("\n")[-2][7:]  # char 7 and on from second to last line
-        if not _nonce_is_valid(nonce):
-            return False
-        # recover message from nonce / signed message
-        recovered_address = Web3.eth.account.recover_message(
-            message, signature=signed_message
-        )
-        # if all good, pass on to api view
-        if address == recovered_address:
-            return True
+    except:
+        return None
+    # make sure recovered address is correct
+    if address != recovered_address:
+        return None
+    return recovered_address
 
 
 def siwe_required(function=None):
@@ -89,11 +98,11 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         # so we'll always allow GET, HEAD or OPTIONS requests.
         if request.method in permissions.SAFE_METHODS:
             return True
-        
+
         # Otherwise see if this wallet is an admin
         check_for_siwe(request)
         address = request.GET.get("address") or request.POST.get("address")
-        return len(Wallet.filter(address=address, is_admin = True)) > 0
-    
+        return len(Wallet.filter(address=address, is_admin=True)) > 0
+
 
 # TODO for posting question/answers, verify chain state

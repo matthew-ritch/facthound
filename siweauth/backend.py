@@ -6,24 +6,11 @@ from eth_account.messages import SignableMessage
 from eth_account.datastructures import SignedMessage
 
 from siweauth.models import Nonce, Wallet
+from siweauth.auth import _nonce_is_valid, check_for_siwe
 
 from hexbytes import HexBytes
 
 w3 = Web3()
-
-
-def _nonce_is_valid(nonce: str) -> bool:
-    """
-    Check if given nonce exists and has not yet expired.
-    :param nonce: The nonce string to validate.
-    :return: True if valid else False.
-    """
-    n = Nonce.objects.filter(value=nonce).first()
-    is_valid = False
-    if n is not None and n.expiration > datetime.datetime.now(tz=pytz.UTC):
-        is_valid = True
-        n.delete()
-    return is_valid
 
 
 class SiweBackend(BaseBackend):
@@ -31,36 +18,20 @@ class SiweBackend(BaseBackend):
     Authenticate via siwe
     """
 
-    def authenticate(self, request, message: SignableMessage = None, signed_message = None):
-        # request must have nonce, address, message fields
+    def authenticate(
+        self, request, message: SignableMessage = None, signed_message=None
+    ):
+        # request must have message and signed_message fields
         if None in [message, signed_message]:
             return None
-        message = SignableMessage(*[x.encode() if type(x) == str else x for x in message])
-        signed_message = SignedMessage(*signed_message)
-        # check for format
-        # TODO make sure message ends in timestamp and nonce
-        if type(message.body) != str:
-            body = str(message.body.decode())
-        else:
-            body = message.body
-        len(body.split("\n")) >= 7
-        # check for nonce in db
-        nonce = body.split("\n")[-3][7:]  # char 7 and on from second to last line
-        if not _nonce_is_valid(nonce):
-            return None
-        # recover address from nonce / signed message
-        address = body.split("\n")[1]
-        recovered_address = w3.eth.account.recover_message(
-            signable_message=message, signature=HexBytes(signed_message.signature)
-        )
-        # make sure recovered address is correct
-        if address != recovered_address:
+        recovered_address = check_for_siwe(message, signed_message)
+        if recovered_address is None:
             return None
         # if user exists, return user
-        wallet = Wallet.objects.filter(address=address).first()
+        wallet = Wallet.objects.filter(address=recovered_address).first()
         # if user doesn't exist, make a user for this wallet
         if wallet is None:
-            wallet = Wallet.objects.create_user(address)
+            wallet = Wallet.objects.create_user(recovered_address)
         return wallet
 
     def get_user(self, wallet_id):
