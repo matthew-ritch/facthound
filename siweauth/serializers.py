@@ -13,6 +13,7 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
         self.fields["message"] = serializers.CharField()
         self.fields["signed_message"] = serializers.CharField()
         del self.fields['password']
+        del self.fields[self.username_field]
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
@@ -28,5 +29,10 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
             pass
 
         self.user = authenticate(**authenticate_kwargs)
+        refresh = self.get_token(self.user)
+        data = {}
 
-        return {}
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+
+        return data
