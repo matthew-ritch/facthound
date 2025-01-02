@@ -15,7 +15,6 @@ from siweauth.models import validate_ethereum_address, Wallet
 class Thread(models.Model):
     topic = models.CharField(max_length=1000)
     dt = models.DateTimeField()
-    n_replies = models.IntegerField(default=0)
 
     def __str__(self):
         return self.topic
@@ -23,9 +22,9 @@ class Thread(models.Model):
 
 class Post(models.Model):
     thread = models.ForeignKey(Thread, on_delete=models.CASCADE)
-    thread_index = models.IntegerField(default=0)
     text = models.TextField()
     dt = models.DateTimeField()
+    poster = models.ForeignKey(Wallet, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"{self.thread.topic}: reply {self.thread_index}"
@@ -62,7 +61,7 @@ class Question(models.Model):
 class Answer(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    answerHash = models.BinaryField()
+    answerHash = models.BinaryField(unique=True)
     answerer = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     status = models.CharField(
         choices=[
