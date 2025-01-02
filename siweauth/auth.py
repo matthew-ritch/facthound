@@ -1,24 +1,25 @@
+from django.http import JsonResponse
+from rest_framework import permissions
+
 from functools import wraps
 import datetime, pytz
-from web3 import Web3, EthereumTesterProvider
+from web3 import Web3
 from hexbytes import HexBytes
 from eth_account.messages import SignableMessage
 from eth_account.datastructures import SignedMessage
-from eth_keys.exceptions import BadSignature
-from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.http import JsonResponse
-from rest_framework import permissions
-from datetime import datetime, timedelta
-from .settings import (
+from datetime import datetime
+
+from siweauth.settings import (
     SIWE_MESSAGE_VALIDITY,
     SIWE_CHAIN_ID,
     SIWE_DOMAIN,
-    SIWE_URI
+    SIWE_URI,
 )
-
 from siweauth.models import Nonce, Wallet
 
+
 w3 = Web3()
+
 
 def _nonce_is_valid(nonce: str) -> bool:
     """
@@ -28,7 +29,7 @@ def _nonce_is_valid(nonce: str) -> bool:
     """
     n = Nonce.objects.filter(value=nonce).first()
     is_valid = False
-    if n is not None: 
+    if n is not None:
         if n.expiration > datetime.now(tz=pytz.UTC):
             is_valid = True
         n.delete()
@@ -56,31 +57,29 @@ def request_passes_test(test_func, fail_message):
 
 def parse_siwe_message(message_body: str) -> dict:
     """Parse SIWE message into components"""
-    lines = message_body.split('\n')
+    lines = message_body.split("\n")
     try:
-        domain = lines[0].split(' ')[0]
+        domain = lines[0].split(" ")[0]
         address = lines[1].strip()
-        uri = lines[5].split(': ')[1].strip()
-        chain_id = int(lines[7].split(': ')[1])
-        nonce = lines[8].split(': ')[1].strip()
-        issued_at = datetime.fromisoformat(lines[9].split(': ')[1].strip())
-        
+        uri = lines[5].split(": ")[1].strip()
+        chain_id = int(lines[7].split(": ")[1])
+        nonce = lines[8].split(": ")[1].strip()
+        issued_at = datetime.fromisoformat(lines[9].split(": ")[1].strip())
+
         return {
-            'domain': domain,
-            'address': address,
-            'uri': uri,
-            'chain_id': chain_id,
-            'nonce': nonce,
-            'issued_at': issued_at
+            "domain": domain,
+            "address": address,
+            "uri": uri,
+            "chain_id": chain_id,
+            "nonce": nonce,
+            "issued_at": issued_at,
         }
     except (IndexError, ValueError):
         return None
 
 
 def check_for_siwe(message, signed_message):
-    message = SignableMessage(
-        *[x.encode() if type(x) == str else x for x in message]
-    )
+    message = SignableMessage(*[x.encode() if type(x) == str else x for x in message])
     signed_message = SignedMessage(*signed_message)
     # check for format
     if type(message.body) != str:
@@ -94,25 +93,25 @@ def check_for_siwe(message, signed_message):
         return None
     # Validate message components
     # Validate timestamp
-    now = datetime.now(parsed['issued_at'].tzinfo)
-    if abs((now - parsed['issued_at']).total_seconds()) > SIWE_MESSAGE_VALIDITY * 60:
+    now = datetime.now(parsed["issued_at"].tzinfo)
+    if abs((now - parsed["issued_at"]).total_seconds()) > SIWE_MESSAGE_VALIDITY * 60:
         return None
-        
+
     # Validate chain ID
     # TODO multi-chain support
-    if parsed['chain_id'] != SIWE_CHAIN_ID:
+    if parsed["chain_id"] != SIWE_CHAIN_ID:
         return None
-        
+
     # Validate domain and URI
-    if parsed['domain'] != SIWE_DOMAIN or parsed['uri'] != SIWE_URI:
+    if parsed["domain"] != SIWE_DOMAIN or parsed["uri"] != SIWE_URI:
         return None
-        
+
     # check for nonce in db
-    if not _nonce_is_valid(parsed['nonce']):
+    if not _nonce_is_valid(parsed["nonce"]):
         return None
 
     # recover address from nonce / signed message
-    address = parsed['address']
+    address = parsed["address"]
     try:
         recovered_address = w3.eth.account.recover_message(
             signable_message=message, signature=HexBytes(signed_message.signature)

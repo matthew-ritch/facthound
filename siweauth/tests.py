@@ -1,17 +1,12 @@
-from web3 import Web3
-from eth_account.messages import encode_defunct
-import json
-import datetime
-from hexbytes import HexBytes
-from siwe.siwe import SiweMessage
-from eth_account.messages import SignableMessage
-from eth_account.datastructures import SignedMessage
-
 from django.test import TestCase
 from django.test import RequestFactory
 from django.contrib.auth import authenticate
 
-from siweauth.backend import SiweBackend
+from web3 import Web3
+from eth_account.messages import encode_defunct
+import json
+import datetime
+
 from siweauth.models import Nonce, Wallet
 from siweauth.views import get_nonce, TokenObtainPairView, who_am_i
 from siweauth.auth import check_for_siwe, _nonce_is_valid
@@ -145,7 +140,7 @@ class TestSiweAuth(TestCase):
         # try again with same nonce - will not work
         wallet = authenticate(message=encoded_message, signed_message=signed_message)
         self.assertIsNone(wallet)
-    
+
     def test_invalid_nonce(self):
         # create verification triple with an invalid nonce
         invalid_nonce = "invalid_nonce"
@@ -331,7 +326,7 @@ Issued At: {old_time}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-        
+
         # Should not authenticate with old timestamp
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
@@ -344,7 +339,9 @@ Issued At: {old_time}
         recovered_address = check_for_siwe(
             message_serialized, signed_message_serialized
         )
-        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
+        self.assertIsNone(
+            recovered_address
+        )  # This should fail in a secure implementation
 
     def test_wrong_chain_id_acceptance(self):
         # Create message with wrong chain ID
@@ -364,7 +361,7 @@ Issued At: {datetime.datetime.now()}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-        
+
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
             signed_message.messageHash.hex(),
@@ -376,7 +373,9 @@ Issued At: {datetime.datetime.now()}
         recovered_address = check_for_siwe(
             message_serialized, signed_message_serialized
         )
-        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
+        self.assertIsNone(
+            recovered_address
+        )  # This should fail in a secure implementation
 
     def test_wrong_domain_acceptance(self):
         # Create message with wrong domain
@@ -396,7 +395,7 @@ Issued At: {datetime.datetime.now()}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-        
+
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
             signed_message.messageHash.hex(),
@@ -408,4 +407,6 @@ Issued At: {datetime.datetime.now()}
         recovered_address = check_for_siwe(
             message_serialized, signed_message_serialized
         )
-        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
+        self.assertIsNone(
+            recovered_address
+        )  # This should fail in a secure implementation

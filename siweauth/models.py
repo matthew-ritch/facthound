@@ -60,7 +60,6 @@ class Wallet(AbstractBaseUser):
     is_admin = models.BooleanField(default=False)
     objects = WalletManager()
 
-    #TODO is this the right way to handle this?
-    USERNAME_FIELD = 'address'
+    # TODO is this the right way to handle this?
+    USERNAME_FIELD = "address"
     REQUIRED_FIELDS = []
-

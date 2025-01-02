@@ -1,14 +1,11 @@
-from django.conf import settings
 from django.contrib.auth.backends import BaseBackend
-import datetime, pytz
-from web3 import Web3, EthereumTesterProvider
+
+from web3 import Web3
 from eth_account.messages import SignableMessage
-from eth_account.datastructures import SignedMessage
 
-from siweauth.models import Nonce, Wallet
-from siweauth.auth import _nonce_is_valid, check_for_siwe
+from siweauth.models import Wallet
+from siweauth.auth import check_for_siwe
 
-from hexbytes import HexBytes
 
 w3 = Web3()
 
