@@ -74,6 +74,14 @@ class TestNonceIsValid(TestCase):
         # test again with expired nonce
         self.assertFalse(_nonce_is_valid(nonce))
 
+    def test_invalid_nonce(self):
+        nonce = "notarealnonce"
+        match_query = Nonce.objects.filter(value=nonce)
+        self.assertEqual(len(match_query), 0)
+        self.assertFalse(_nonce_is_valid(nonce))
+        # test again
+        self.assertFalse(_nonce_is_valid(nonce))
+
 
 class TestSiweAuth(TestCase):
 
@@ -135,6 +143,19 @@ class TestSiweAuth(TestCase):
         self.assertIsNotNone(wallet)
         self.assertEqual(len(Wallet.objects.filter(address=self.acc.address)), 1)
         # try again with same nonce - will not work
+        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        self.assertIsNone(wallet)
+    
+    def test_invalid_nonce(self):
+        # create verification triple with an invalid nonce
+        invalid_nonce = "invalid_nonce"
+        message = make_message(self.acc.address, invalid_nonce)
+        encoded_message = encode_defunct(text=message)
+        signed_message = self.w3.eth.account.sign_message(
+            encoded_message,
+            self.w3.to_hex(self.acc.key),
+        )
+        # try to authenticate with the invalid nonce
         wallet = authenticate(message=encoded_message, signed_message=signed_message)
         self.assertIsNone(wallet)
 
@@ -282,4 +303,109 @@ class TestCheckForSiwe(TestCase):
         self.assertIsNone(recovered_address)
 
 
-bytes
+class TestSecurityVulnerabilities(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.w3 = Web3()
+        self.acc = self.w3.eth.account.create()
+        request = self.factory.get("/api/get_nonce/")
+        response = get_nonce(request)
+        self.nonce = json.loads(response.content)["nonce"]
+
+    def test_old_timestamp_acceptance(self):
+        # Create message with old timestamp
+        old_time = datetime.datetime.now() - datetime.timedelta(days=7)
+        message = f"""testhost wants you to sign in with your Ethereum account:
+{self.acc.address}
+
+To make posts.
+
+URI: https://testhost/api/token/
+Version: 1
+Chain ID: 1
+Nonce: {self.nonce}
+Issued At: {old_time}
+        """
+        encoded_message = encode_defunct(text=message)
+        signed_message = self.w3.eth.account.sign_message(
+            encoded_message,
+            self.w3.to_hex(self.acc.key),
+        )
+        
+        # Should not authenticate with old timestamp
+        message_serialized = [x.decode() for x in encoded_message]
+        signed_message_serialized = [
+            signed_message.messageHash.hex(),
+            signed_message.r,
+            signed_message.s,
+            signed_message.v,
+            signed_message.signature.hex(),
+        ]
+        recovered_address = check_for_siwe(
+            message_serialized, signed_message_serialized
+        )
+        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
+
+    def test_wrong_chain_id_acceptance(self):
+        # Create message with wrong chain ID
+        message = f"""testhost wants you to sign in with your Ethereum account:
+{self.acc.address}
+
+To make posts.
+
+URI: https://testhost/api/token/
+Version: 1
+Chain ID: 999999
+Nonce: {self.nonce}
+Issued At: {datetime.datetime.now()}
+        """
+        encoded_message = encode_defunct(text=message)
+        signed_message = self.w3.eth.account.sign_message(
+            encoded_message,
+            self.w3.to_hex(self.acc.key),
+        )
+        
+        message_serialized = [x.decode() for x in encoded_message]
+        signed_message_serialized = [
+            signed_message.messageHash.hex(),
+            signed_message.r,
+            signed_message.s,
+            signed_message.v,
+            signed_message.signature.hex(),
+        ]
+        recovered_address = check_for_siwe(
+            message_serialized, signed_message_serialized
+        )
+        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
+
+    def test_wrong_domain_acceptance(self):
+        # Create message with wrong domain
+        message = f"""malicious-site.com wants you to sign in with your Ethereum account:
+{self.acc.address}
+
+To make posts.
+
+URI: https://malicious-site.com/api/token/
+Version: 1
+Chain ID: 1
+Nonce: {self.nonce}
+Issued At: {datetime.datetime.now()}
+        """
+        encoded_message = encode_defunct(text=message)
+        signed_message = self.w3.eth.account.sign_message(
+            encoded_message,
+            self.w3.to_hex(self.acc.key),
+        )
+        
+        message_serialized = [x.decode() for x in encoded_message]
+        signed_message_serialized = [
+            signed_message.messageHash.hex(),
+            signed_message.r,
+            signed_message.s,
+            signed_message.v,
+            signed_message.signature.hex(),
+        ]
+        recovered_address = check_for_siwe(
+            message_serialized, signed_message_serialized
+        )
+        self.assertIsNone(recovered_address)  # This should fail in a secure implementation
