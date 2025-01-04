@@ -43,10 +43,10 @@ def post(request):
 
     # check if params make sense
     if text is None:
-        return JsonResponse({"message": "text is required"}, status=400)
+        return JsonResponse({"message": "your post needs text"}, status=400)
     if not (thread is None ^ topic is None):
         return JsonResponse(
-            {"message": "only provide one of either thread or topic"}, status=400
+            {"message": "cannot set topic on existing thread"}, status=400
         )
     # make post
     post = _make_post(request.user, text, thread, topic, tags)

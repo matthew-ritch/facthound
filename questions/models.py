@@ -32,18 +32,19 @@ class Post(models.Model):
 
 class Question(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    questionHash = models.BinaryField()
+    questionHash = models.BinaryField(null=True)
     questionAddress = models.CharField(
         verbose_name="FactHound Question Address",
         max_length=42,
         unique=True,
+        null=True,
         validators=[
             RegexValidator(regex=r"^0x[a-fA-F0-9]{40}$"),
             validate_ethereum_address,
         ],
     )
     asker = models.ForeignKey(User, on_delete=models.CASCADE)
-    bounty = models.IntegerField()  # units of wei
+    bounty = models.IntegerField(null=True)  # units of wei
     status = models.CharField(
         choices=[
             ("OP", "Open"),
@@ -55,13 +56,13 @@ class Question(models.Model):
     )
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.asker}'s question {self.questionHash}"
+        return f"{self.post.thread.topic}: {self.asker}'s question {self.pk}"
 
 
 class Answer(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    answerHash = models.BinaryField(unique=True)
+    answerHash = models.BinaryField(unique=True, null=True)
     answerer = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(
         choices=[
@@ -74,7 +75,7 @@ class Answer(models.Model):
     )
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.answerer}'s answer {self.answerHash}"
+        return f"{self.post.thread.topic}: {self.answerer}'s answer {self.pk}"
 
 
 class Tag(models.Model):
