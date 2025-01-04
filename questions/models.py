@@ -6,7 +6,7 @@ from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 
 from web3 import Web3
 
-from siweauth.models import validate_ethereum_address, Wallet
+from siweauth.models import validate_ethereum_address, User
 
 
 ### siwe
@@ -24,7 +24,7 @@ class Post(models.Model):
     thread = models.ForeignKey(Thread, on_delete=models.CASCADE)
     text = models.TextField()
     dt = models.DateTimeField()
-    poster = models.ForeignKey(Wallet, on_delete=models.CASCADE)
+    poster = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"{self.thread.topic}: reply {self.thread_index}"
@@ -42,7 +42,7 @@ class Question(models.Model):
             validate_ethereum_address,
         ],
     )
-    asker = models.ForeignKey(Wallet, on_delete=models.CASCADE)
+    asker = models.ForeignKey(User, on_delete=models.CASCADE)
     bounty = models.IntegerField()  # units of wei
     status = models.CharField(
         choices=[
@@ -62,7 +62,7 @@ class Answer(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     answerHash = models.BinaryField(unique=True)
-    answerer = models.ForeignKey(Wallet, on_delete=models.CASCADE)
+    answerer = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(
         choices=[
             ("OP", "Open"),

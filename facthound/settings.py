@@ -138,5 +138,5 @@ REST_FRAMEWORK = {
 
 # SIWE
 
-AUTH_USER_MODEL = "siweauth.Wallet"
+AUTH_USER_MODEL = "siweauth.User"
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend', "siweauth.backend.SiweBackend"]

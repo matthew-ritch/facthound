@@ -3,7 +3,7 @@ from django.contrib.auth.backends import BaseBackend
 from web3 import Web3
 from eth_account.messages import SignableMessage
 
-from siweauth.models import Wallet
+from siweauth.models import User
 from siweauth.auth import check_for_siwe
 
 
@@ -25,14 +25,14 @@ class SiweBackend(BaseBackend):
         if recovered_address is None:
             return None
         # if user exists, return user
-        wallet = Wallet.objects.filter(address=recovered_address).first()
+        user = User.objects.filter(wallet=recovered_address).first()
         # if user doesn't exist, make a user for this wallet
-        if wallet is None:
-            wallet = Wallet.objects.create_user(recovered_address)
-        return wallet
+        if user is None:
+            user = User.objects.create_user_address(recovered_address)
+        return user
 
-    def get_user(self, wallet_id):
+    def get_user(self, user_id):
         try:
-            return Wallet.objects.get(pk=wallet_id)
-        except Wallet.DoesNotExist:
+            return User.objects.get(pk=user_id)
+        except User.DoesNotExist:
             return None

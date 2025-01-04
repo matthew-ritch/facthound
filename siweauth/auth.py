@@ -15,7 +15,7 @@ from siweauth.settings import (
     SIWE_DOMAIN,
     SIWE_URI,
 )
-from siweauth.models import Nonce, Wallet
+from siweauth.models import Nonce, User
 
 
 w3 = Web3()
@@ -149,7 +149,11 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         # Otherwise see if this wallet is an admin
         check_for_siwe(request)
         address = request.GET.get("address") or request.POST.get("address")
-        return len(Wallet.filter(address=address, is_admin=True)) > 0
+        if address:
+            return len(User.filter(wallet=address, is_admin=True)) > 0
+        username = request.GET.get("username") or request.POST.get("username")
+        if address:
+            return len(User.filter(username=username, is_admin=True)) > 0
 
 
 # TODO for posting question/answers, verify chain state

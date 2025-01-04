@@ -20,8 +20,8 @@ class Nonce(models.Model):
         return self.value
 
 
-class WalletManager(BaseUserManager):
-    def create_user(self, address):
+class UserManager(BaseUserManager):
+    def create_user_address(self, address):
         """
         Creates and saves a User with the given eth address
         """
@@ -29,37 +29,54 @@ class WalletManager(BaseUserManager):
             raise ValueError("Users must have an eth address")
 
         user = self.model(
-            address=address,
+            wallet=address,
         )
 
         user.save(using=self._db)
+        return user
+
+    def create_user_username_email_password(self, username, email, password):
+        """
+        Creates and saves a User with the given username, email, and password
+        """
+
+        for field in [username, password, email]:
+            if not field:
+                raise ValueError("Users must have a username, password, and email")
+
+        email = self.normalize_email(email)
+        user = self.model(email=email, username=username)
+        user.set_password(password)
+        user.save()
         return user
 
     def create_superuser(self, address):
         """
         Creates and saves a superuser with the given eth address
         """
-        u = self.create_user(address, password=address)
+        u = self.create_user(address)
         u.is_admin = True
         u.save(using=self._db)
         return u
 
 
-class Wallet(AbstractBaseUser):
-    address = models.CharField(
+class User(AbstractBaseUser):
+    wallet = models.CharField(
         verbose_name="Wallet Address",
         max_length=42,
         unique=True,
+        null=True,
         validators=[
             RegexValidator(regex=r"^0x[a-fA-F0-9]{40}$"),
             validate_ethereum_address,
         ],
     )
 
-    username = models.CharField(max_length=150, blank=True, null=True)
+    username = models.CharField(max_length=150, blank=True, null=True, unique=True)
+    email = models.CharField(max_length=150, blank=True, null=True, unique=True)
     is_admin = models.BooleanField(default=False)
-    objects = WalletManager()
+    objects = UserManager()
 
     # TODO is this the right way to handle this?
-    USERNAME_FIELD = "address"
+    USERNAME_FIELD = "username"
     REQUIRED_FIELDS = []

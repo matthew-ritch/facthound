@@ -7,8 +7,8 @@ from eth_account.messages import encode_defunct
 import json
 import datetime
 
-from siweauth.models import Nonce, Wallet
-from siweauth.views import get_nonce, TokenObtainPairView, who_am_i
+from siweauth.models import Nonce, User
+from siweauth.views import get_nonce, TokenObtainPairView, SIWETokenObtainPairView, who_am_i
 from siweauth.auth import check_for_siwe, _nonce_is_valid
 
 
@@ -77,6 +77,34 @@ class TestNonceIsValid(TestCase):
         # test again
         self.assertFalse(_nonce_is_valid(nonce))
 
+class TestNormalAuth(TestCase):
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.username = "test"
+        self.email = "test@test.com"
+        self.raw_password = "testpass"
+    
+    def test_create_new_user(self):
+        user = User.objects.create_user_username_email_password(self.username, self.email, self.raw_password)
+        self.assertIsNotNone(User.objects.filter(username = self.username, email = self.email).first())
+        self.assertEquals(user, User.objects.filter(username = self.username, email = self.email).first())
+
+    def test_authenticate_new_user(self):
+        user = User.objects.create_user_username_email_password(self.username, self.email, self.raw_password)
+        authuser = authenticate(username=self.username, password=self.raw_password)
+        self.assertIsNotNone(authuser)
+        self.assertEquals(user, authuser)
+    
+    def test_authenticate_fails_unset_user(self):
+        authuser = authenticate(username=self.username, password=self.raw_password)
+        self.assertIsNone(authuser)
+
+    def test_authenticate_fails_wrong_pass_user(self):
+        user = User.objects.create_user_username_email_password(self.username, self.email, self.raw_password)
+        authuser = authenticate(username=self.username, password=self.raw_password + 'wrongsuffix')
+        self.assertIsNone(authuser)
+
 
 class TestSiweAuth(TestCase):
 
@@ -91,7 +119,7 @@ class TestSiweAuth(TestCase):
 
     def test_authenticate_new_user(self):
         # this will also create the user
-        self.assertEqual(len(Wallet.objects.filter(address=self.acc.address)), 0)
+        self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 0)
         # create verification triple
         message = make_message(self.acc.address, self.nonce)
         encoded_message = encode_defunct(text=message)
@@ -108,7 +136,7 @@ class TestSiweAuth(TestCase):
 
     def test_authenticate_returning_user(self):
         # this will also create the user
-        self.assertEqual(len(Wallet.objects.filter(address=self.acc.address)), 0)
+        self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 0)
         # create verification triple
         message = make_message(self.acc.address, self.nonce)
         encoded_message = encode_defunct(text=message)
@@ -123,7 +151,7 @@ class TestSiweAuth(TestCase):
         wallet = authenticate(message=encoded_message, signed_message=signed_message)
         self.assertIsNone(wallet)
         # make new nonce and message
-        self.assertEqual(len(Wallet.objects.filter(address=self.acc.address)), 1)
+        self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 1)
         request = self.factory.get("/api/get_nonce/")
         response = get_nonce(request)
         self.nonce = json.loads(response.content)["nonce"]
@@ -136,7 +164,7 @@ class TestSiweAuth(TestCase):
 
         wallet = authenticate(message=encoded_message, signed_message=signed_message)
         self.assertIsNotNone(wallet)
-        self.assertEqual(len(Wallet.objects.filter(address=self.acc.address)), 1)
+        self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 1)
         # try again with same nonce - will not work
         wallet = authenticate(message=encoded_message, signed_message=signed_message)
         self.assertIsNone(wallet)
@@ -172,7 +200,7 @@ class TestGetJWTToken(TestCase):
             self.w3.to_hex(self.acc.key),
         )
 
-    def test_get_token(self):
+    def test_get_token_siwe(self):
         message_serialized = [x.decode() for x in self.encoded_message]
         signed_message_serialized = [
             self.signed_message.messageHash.hex(),
@@ -189,8 +217,21 @@ class TestGetJWTToken(TestCase):
             },
         )
         # request.user = self.wallet
+        response = SIWETokenObtainPairView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_token_normal(self):
+        user = User.objects.create_user_username_email_password("testuser", "test@test.com", "testpass")
+        request = self.factory.post(
+            "/api/token/",
+            {
+                "username": "testuser",
+                "password": "testpass",
+            },
+        )
         response = TokenObtainPairView.as_view()(request)
         self.assertEqual(response.status_code, 200)
+
 
     # test use token
     def test_use_token(self):
@@ -209,7 +250,7 @@ class TestGetJWTToken(TestCase):
                 "signed_message": signed_message_serialized,
             },
         )
-        response = TokenObtainPairView.as_view()(request)
+        response = SIWETokenObtainPairView.as_view()(request)
         self.assertEqual(response.status_code, 200)
         token = json.loads(response.render().content)["access"]
         request = self.factory.get(
