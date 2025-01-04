@@ -9,9 +9,6 @@ from web3 import Web3
 from siweauth.models import validate_ethereum_address, User
 
 
-### siwe
-
-
 class Thread(models.Model):
     topic = models.CharField(max_length=1000)
     dt = models.DateTimeField()
