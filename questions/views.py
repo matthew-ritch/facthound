@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
 
 import datetime
+import pytz
 
 from siweauth.models import User, Nonce
 from siweauth.auth import IsAdminOrReadOnly
@@ -19,14 +20,15 @@ from questions.serializers import (
 
 # endpoints for making posts, threads, q + a
 def _make_post(user, text, thread=None, topic=None, tags=None):
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(tz=pytz.UTC)
     # make thread if neeeded, else get it
-    assert thread is None ^ topic is None  # xor
+    assert (thread is None) ^ (topic is None)  # xor
     if thread is None:
         thread = Thread.objects.create(topic=topic, dt=now)
-        for t in tags:
-            tag, _ = Tag.objects.get_or_create(name=t)
-            thread.tags.add(tag)
+        if tags:
+            for t in tags:
+                tag, _ = Tag.objects.get_or_create(name=t)
+                thread.tag_set.add(tag)
     else:
         thread = Thread.objects.get(pk=thread)
     # make and return post
@@ -36,17 +38,20 @@ def _make_post(user, text, thread=None, topic=None, tags=None):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def post(request):
-    thread = request.query_params.get("thread")
-    topic = request.query_params.get("topic")
-    text = request.query_params.get("text")
-    tags = request.query_params.get("tags")
+    thread = request.data.get("thread")
+    topic = request.data.get("topic")
+    text = request.data.get("text")
+    tags = request.data.getlist("tags")
 
     # check if params make sense
     if text is None:
-        return JsonResponse({"message": "your post needs text"}, status=400)
-    if not (thread is None ^ topic is None):
+        return JsonResponse({"message": "Your post needs text."}, status=400)
+    if not (thread is None) ^ (topic is None):
         return JsonResponse(
-            {"message": "cannot set topic on existing thread"}, status=400
+            {
+                "message": "One of thread or topic must be specified. You cannot specify both."
+            },
+            status=400,
         )
     # make post
     post = _make_post(request.user, text, thread, topic, tags)
@@ -58,24 +63,30 @@ def post(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def question(request):
-    thread = request.query_params.get("thread")
-    topic = request.query_params.get("topic")
-    text = request.query_params.get("text")
-    tags = request.query_params.get("tags")
+    thread = request.data.get("thread")
+    topic = request.data.get("topic")
+    text = request.data.get("text")
+    tags = request.data.getlist("tags")
     questionAddress = request.query_params.get("questionAddress")
+    questionHash = request.query_params.get("questionHash")
+    asker = request.user
     # check if params make sense
     if text is None:
-        return JsonResponse({"message": "text is required"}, status=400)
-    if not (thread is None ^ topic is None):
+        return JsonResponse({"message": "Your post needs text."}, status=400)
+    if not (thread is None) ^ (topic is None):
         return JsonResponse(
-            {"message": "only provide one of either thread or topic"}, status=400
+            {
+                "message": "One of thread or topic must be specified. You cannot specify both."
+            },
+            status=400,
         )
-    if questionAddress is None:
-        return JsonResponse({"message": "questionAddress is required"}, status=400)
-    # TODO verify questionaddress exists and get questionHash, asker, bounty, status
-    questionHash, asker, bounty, status = None, None, None, None
-    # TODO verify that asker == request.user
-    # TODO verify questionHash is hash of correct text
+    if questionAddress:
+        # TODO verify questionaddress exists and check asker, get questionHash, bounty, status
+        questionHash, asker, bounty, status = None, None, None, None
+        # TODO verify that asker == request.user
+        # TODO verify questionHash is hash of correct text
+    else:
+        questionHash, bounty, status = None, None, "OP"
     # make post
     post = _make_post(request.user, text, thread, topic, tags)
     # make question
@@ -100,38 +111,46 @@ def question(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def answer(request):
-    thread = request.query_params.get("thread")
-    text = request.query_params.get("text")
-    questionAddress = request.query_params.get("questionAddress")
-    answerHash = request.query_params.get("questionAddress")
+    thread = request.data.get("thread")
+    text = request.data.get("text")
+    question = request.data.get("question")
+    questionAddress = request.data.get("questionAddress")
+    answerHash = request.data.get("questionAddress")
+    answerer = request.user
     # check if params make sense
     if text is None:
-        return JsonResponse({"message": "text is required"}, status=400)
+        return JsonResponse({"message": "Your post needs text."}, status=400)
     if thread is None:
-        return JsonResponse({"message": "thread is required"}, status=400)
-    if questionAddress is None:
-        return JsonResponse({"message": "questionAddress is required"}, status=400)
-    if answerHash is None:
-        return JsonResponse({"message": "questionAddress is required"}, status=400)
-    try:
-        question = Question.objects.get(questionAddress=questionAddress)
-    except Question.DoesNotExist:
-        return JsonResponse(
-            {"message": "question with that address does not exist in db"}, status=400
-        )
-    if question.thread.pk != thread:
+        return JsonResponse({"message": "Your post needs a thread."}, status=400)
+    if question is None:
+        return JsonResponse({"message": "Your answer needs a question."}, status=400)
+    if (questionAddress is None) ^ (answerHash is None):
         return JsonResponse(
             {
-                "message": "answers must be posted in the same thread as the question they answer"
+                "message": "If questionAddress or answerHash are provided, then both are required"
+            },
+            status=400,
+        )
+    try:
+        question = Question.objects.get(pk=question)
+    except Question.DoesNotExist:
+        return JsonResponse({"message": "No question with that id exists."}, status=400)
+    if question.post.thread.pk != int(thread):
+        return JsonResponse(
+            {
+                "message": "Answers must be posted in the same thread as the question they answer."
             },
             status=400,
         )
     # from contracts:
-    # TODO verify questionaddress exists and has answerHash as ananswer
-    # then get answerer, status
-    answerer, status = None, None
-    # TODO verify that answerer == request.user
-    # TODO verify answerHash is hash of correct text
+    if answerHash:
+        # TODO verify questionaddress exists and has answerHash as an answer
+        # then check answerer, get status
+        answerer, status = None, None
+        # TODO verify that answerer == request.user
+        # TODO verify answerHash is hash of correct text
+    else:
+        status = "OP"
     # make post
     post = _make_post(request.user, text, thread, None, None)
     # make answer

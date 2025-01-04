@@ -15,4 +15,8 @@ router.register(r"tags", views.TagViewSet, basename="tag")
 # The API URLs are now determined automatically by the router.
 urlpatterns = [
     path("", include(router.urls)),
+    path("/api/post/", include(router.urls)),
+    path('api/post/', views.post, name='post'),
+    path('api/question/', views.question, name='question'),
+    path('api/answer/', views.answer, name='answer'),
 ]

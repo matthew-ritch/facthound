@@ -27,7 +27,7 @@ class Post(models.Model):
     poster = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.thread.topic}: reply {self.thread_index}"
+        return f"{self.thread.topic}: reply {self.pk}"
 
 
 class Question(models.Model):
