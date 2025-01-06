@@ -63,7 +63,7 @@ class Answer(models.Model):
     answerer = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(
         choices=[
-            ("OP", "Open"),
+            ("UN", "Unselected"),
             ("SE", "Selected"),
             ("CE", "Certified"),
             ("PO", "Paid Out"),

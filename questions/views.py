@@ -1,3 +1,4 @@
+# TODO verify hashs are correct in contracts
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -5,6 +6,9 @@ from rest_framework import viewsets
 
 import datetime
 import pytz
+import os
+from web3 import Web3
+import json
 
 from siweauth.models import User, Nonce
 from siweauth.auth import IsAdminOrReadOnly
@@ -16,6 +20,17 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
+from questions.settings import allowed_owners
+
+
+w3 = Web3(
+    Web3.HTTPProvider(
+        f"{os.getenv('ALCHEMY_API_ENDPOINT')}/{os.getenv('ALCHEMY_API_KEY')}"
+    )
+)
+question_contract = json.load(open("contracts/question.json"))
+question_abi = question_contract["abi"]
+question_bytecode = question_contract["bytecode"]["object"]
 
 
 # endpoints for making posts, threads, q + a
@@ -68,7 +83,6 @@ def question(request):
     text = request.data.get("text")
     tags = request.data.getlist("tags")
     questionAddress = request.query_params.get("questionAddress")
-    questionHash = request.query_params.get("questionHash")
     asker = request.user
     # check if params make sense
     if text is None:
@@ -81,10 +95,29 @@ def question(request):
             status=400,
         )
     if questionAddress:
-        # TODO verify questionaddress exists and check asker, get questionHash, bounty, status
-        questionHash, asker, bounty, status = None, None, None, None
-        # TODO verify that asker == request.user
-        # TODO verify questionHash is hash of correct text
+        try:
+            contract = w3.eth.Contract(address=questionAddress, abi=question_abi)
+        except:
+            return JsonResponse(
+                {"message": "Failed to load contract."},
+                status=400,
+            )
+        # verify that we own this contract
+        owner = contract.functions.owner().call()
+        if not owner in allowed_owners:
+            return JsonResponse(
+                {"message": "Invalid owner."},
+                status=400,
+            )
+        questionHash = contract.functions.questionHash().call()
+        asker = contract.functions.asker().call()
+        if asker != request.user.wallet:
+            return JsonResponse(
+                {"message": "Invalid asker."},
+                status=400,
+            )
+        bounty = contract.functions.storedValue().call()
+        status = contract.functions.storedValue().call()
     else:
         questionHash, bounty, status = None, None, "OP"
     # make post
@@ -143,12 +176,35 @@ def answer(request):
             status=400,
         )
     # from contracts:
-    if answerHash:
-        # TODO verify questionaddress exists and has answerHash as an answer
-        # then check answerer, get status
-        answerer, status = None, None
-        # TODO verify that answerer == request.user
-        # TODO verify answerHash is hash of correct text
+    if questionAddress:
+        try:
+            contract = w3.eth.Contract(address=questionAddress, abi=question_abi)
+        except:
+            return JsonResponse(
+                {"message": "Failed to load contract."},
+                status=400,
+            )
+        # verify that we own this contract
+        owner = contract.functions.owner().call()
+        if not owner in allowed_owners:
+            return JsonResponse(
+                {"message": "Invalid owner."},
+                status=400,
+            )
+        # verify that answerHash is an answer for this contract and was posted by this answerer
+        answerInfoMap = contract.functions.answerInfoMap().call()
+        if not answerHash in answerInfoMap.keys():
+            return JsonResponse(
+                {"message": "Invalid answerHash."},
+                status=400,
+            )
+        answerer = answerInfoMap[answerHash]
+        if answerer != request.user.wallet:
+            return JsonResponse(
+                {"message": "Invalid answerer."},
+                status=400,
+            )
+        status = "SE" if answerHash == contract.functions.selectedAnswer().call() else "UN"
     else:
         status = "OP"
     # make post
