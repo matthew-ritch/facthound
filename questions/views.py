@@ -82,7 +82,7 @@ def question(request):
     topic = request.data.get("topic")
     text = request.data.get("text")
     tags = request.data.getlist("tags")
-    questionAddress = request.query_params.get("questionAddress")
+    questionAddress = request.data.get("questionAddress")
     asker = request.user
     # check if params make sense
     if text is None:
@@ -96,28 +96,42 @@ def question(request):
         )
     if questionAddress:
         try:
-            contract = w3.eth.Contract(address=questionAddress, abi=question_abi)
+            contract = w3.eth.contract(address=questionAddress, abi=question_abi)
         except:
             return JsonResponse(
                 {"message": "Failed to load contract."},
                 status=400,
             )
         # verify that we own this contract
-        owner = contract.functions.owner().call()
+        owner = contract.caller.owner()
         if not owner in allowed_owners:
             return JsonResponse(
                 {"message": "Invalid owner."},
                 status=400,
             )
-        questionHash = contract.functions.questionHash().call()
-        asker = contract.functions.asker().call()
+        questionHash = contract.caller.questionHash()
+        contract.caller.questionHash()
+        asker = contract.caller.asker()
         if asker != request.user.wallet:
             return JsonResponse(
                 {"message": "Invalid asker."},
                 status=400,
             )
-        bounty = contract.functions.storedValue().call()
-        status = contract.functions.storedValue().call()
+        asker, _ = User.objects.get_or_create(wallet=asker)
+        bounty = w3.eth.get_balance(contract.address)
+        status = (
+            "CA"
+            if contract.caller.isCancelled()
+            else (
+                "RS"
+                if contract.caller.isResolved()
+                else (
+                    "AS"
+                    if (contract.caller.selectedAnswer().hex() == 32 * "0")
+                    else "OP"
+                )
+            )
+        )
     else:
         questionHash, bounty, status = None, None, "OP"
     # make post
@@ -178,21 +192,21 @@ def answer(request):
     # from contracts:
     if questionAddress:
         try:
-            contract = w3.eth.Contract(address=questionAddress, abi=question_abi)
+            contract = w3.eth.contract(address=questionAddress, abi=question_abi)
         except:
             return JsonResponse(
                 {"message": "Failed to load contract."},
                 status=400,
             )
         # verify that we own this contract
-        owner = contract.functions.owner().call()
+        owner = contract.caller.owner()
         if not owner in allowed_owners:
             return JsonResponse(
                 {"message": "Invalid owner."},
                 status=400,
             )
         # verify that answerHash is an answer for this contract and was posted by this answerer
-        answerInfoMap = contract.functions.answerInfoMap().call()
+        answerInfoMap = contract.caller.answerInfoMap()
         if not answerHash in answerInfoMap.keys():
             return JsonResponse(
                 {"message": "Invalid answerHash."},
@@ -204,7 +218,8 @@ def answer(request):
                 {"message": "Invalid answerer."},
                 status=400,
             )
-        status = "SE" if answerHash == contract.functions.selectedAnswer().call() else "UN"
+        answerer, _ = User.objects.get_or_create(wallet=answerer)
+        status = "SE" if answerHash == contract.caller.selectedAnswer() else "UN"
     else:
         status = "OP"
     # make post
