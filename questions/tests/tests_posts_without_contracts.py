@@ -18,7 +18,7 @@ from questions.serializers import (
 )
 
 
-class TestPostsNoContracts(TestCase):
+class TestPosts(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = User.objects.create_user_username_email_password(
@@ -161,7 +161,7 @@ class TestPostsNoContracts(TestCase):
         self.assertEqual(content["message"], "Your post needs text.")
 
 
-class TestQuestionsNoContracts(TestCase):
+class TestQuestions(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = User.objects.create_user_username_email_password(
@@ -324,7 +324,7 @@ class TestQuestionsNoContracts(TestCase):
         self.assertEqual(content["message"], "Your post needs text.")
 
 
-class TestAnswersNoContracts(TestCase):
+class TestAnswers(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = User.objects.create_user_username_email_password(

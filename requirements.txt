@@ -3,3 +3,5 @@ numpy
 django
 djangorestframework
 djangorestframework-simplejwt
+web3>6
+web3[tester]
