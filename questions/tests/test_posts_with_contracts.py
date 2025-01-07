@@ -1,3 +1,4 @@
+# TODO add fail cases for Answer
 from django.test import TestCase
 from django.test import RequestFactory
 from rest_framework.test import force_authenticate
@@ -225,3 +226,236 @@ class TestAnswers(TestCase):
         self.answerer = self.eth_tester.get_accounts()[3]
         self.answerer_user = User.objects.create_user_address(self.answerer)
         views.allowed_owners.append(self.owner)
+        # make a question post
+        question_dict = {
+            "topic": "sometopic",
+            "text": "I am wondering what to do about this topic.",
+            "tags": ["A", "B", "C"],
+        }
+        # deploy question
+        abi = question_contract["abi"]
+        bytecode = question_contract["bytecode"]["object"]
+        self.questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        questionHash = Web3.solidity_keccak(
+            ["address", "string"], [self.asker, question_dict["text"]]
+        )
+        tx_hash = self.questionContract.constructor(
+            self.owner, self.oracle, self.asker, questionHash
+        ).transact({"from": self.asker, "value": 1})
+        # wait for the transaction to be mined
+        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        self.questionContract = w3.eth.contract(
+            address=tx_receipt["contractAddress"], abi=abi
+        )
+        # pack the required info
+        question_dict["questionAddress"] = tx_receipt["contractAddress"]
+        # post about question
+        request = self.factory.post(
+            "/api/question/",
+            question_dict,
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.question(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        self.thread = Thread.objects.get(pk=content["thread"])
+        self.question = Question.objects.get(pk=content["question"])
+
+    def test_reply_to_thread(self):
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.answerer}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing.",
+            "question": self.question.pk,
+            "questionAddress": self.questionContract.address,
+            "answerHash": answerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        # make sure post was created
+        post = Post.objects.get(text=post_dict["text"], thread=post_dict["thread"])
+        postpk = Post.objects.get(pk=content["post"])
+        self.assertEqual(post, postpk)
+        self.assertEqual(post.text, post_dict["text"])
+        self.assertEqual(self.answerer_user, post.poster)
+        # make sure answer was created
+        answer = Answer.objects.get(
+            post__text=post_dict["text"], post__thread=self.thread
+        )
+        answerpk = Answer.objects.get(pk=content["answer"])
+        self.assertEqual(answer, answerpk)
+        self.assertEqual(answer.post.text, post_dict["text"])
+        self.assertEqual(self.answerer_user, answer.answerer)
+        # check answer's contract fields
+        self.assertEqual(answer.answerHash.hex(), post_dict["answerHash"])
+        self.assertEqual(
+            answer.answerer.wallet,
+            self.questionContract.caller.answerInfoMap(answer.answerHash),
+        )
+        # make sure answer and post are identified together
+        self.assertEqual(answer.post, post)
+        # make sure answer answers the right question
+        self.assertEqual(answer.question, self.question)
+        # thread should have 2 post. test associations
+        self.assertEqual(self.thread.post_set.all().count(), 2)
+        self.assertEqual(self.thread, post.thread)
+
+    def test_undeployed_contract_fails(self):
+        qp = Post.objects.create(
+            thread=self.thread,
+            text="Wrong Question Text",
+            dt=datetime.datetime.now(tz=pytz.UTC),
+            poster=self.asker_user,
+        )
+        wrongQuestion = Question.objects.create(
+            post=qp,
+            asker=self.asker_user,
+            status="OP",
+            questionAddress="0x1efF47bc3a10a45D4B230B5d10E37751FE6AA718",
+        )
+        #
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.answerer}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing.",
+            "question": wrongQuestion.pk,
+            "questionAddress": "0x1efF47bc3a10a45D4B230B5d10E37751FE6AA718",
+            "answerHash": answerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            content["message"],
+            "Failed to load contract.",
+        )
+
+    def test_mismatched_question_and_questionAddress(self):
+        qp = Post.objects.create(
+            thread=self.thread,
+            text="Wrong Question Text",
+            dt=datetime.datetime.now(tz=pytz.UTC),
+            poster=self.asker_user,
+        )
+        wrongQuestion = Question.objects.create(
+            post=qp, asker=self.asker_user, status="OP"
+        )
+        # answer the wrong question
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.answerer}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing.",
+            "question": wrongQuestion.pk,
+            "questionAddress": self.questionContract.address,
+            "answerHash": answerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        #
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            content["message"],
+            "This question does not match this questionAddress.",
+        )
+
+    def test_wrong_answerHash_fails(self):
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        wrongAnswerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString + "wrongend"]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.answerer}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing.",
+            "question": self.question.pk,
+            "questionAddress": self.questionContract.address,
+            "answerHash": wrongAnswerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            content["message"],
+            "Invalid answerHash.",
+        )
+
+    def test_user_is_not_answerer_fails(self):
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.oracle}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing.",
+            "question": self.question.pk,
+            "questionAddress": self.questionContract.address,
+            "answerHash": answerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            content["message"],
+            "Invalid answerer.",
+        )

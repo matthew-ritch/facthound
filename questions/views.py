@@ -9,6 +9,7 @@ import pytz
 import os
 from web3 import Web3
 import json
+import hexbytes
 
 from siweauth.models import User, Nonce
 from siweauth.auth import IsAdminOrReadOnly
@@ -162,7 +163,7 @@ def answer(request):
     text = request.data.get("text")
     question = request.data.get("question")
     questionAddress = request.data.get("questionAddress")
-    answerHash = request.data.get("questionAddress")
+    answerHash = request.data.get("answerHash")
     answerer = request.user
     # check if params make sense
     if text is None:
@@ -190,36 +191,41 @@ def answer(request):
             status=400,
         )
     # from contracts:
-    if questionAddress:
+    if questionAddress and answerHash:
+        # verify that this contract matches the question id
+        if not question.questionAddress == questionAddress:
+            return JsonResponse(
+                {"message": "This question does not match this questionAddress."},
+                status=400,
+            )
         try:
             contract = w3.eth.contract(address=questionAddress, abi=question_abi)
+            owner = contract.caller.owner()
         except:
             return JsonResponse(
                 {"message": "Failed to load contract."},
                 status=400,
             )
         # verify that we own this contract
-        owner = contract.caller.owner()
         if not owner in allowed_owners:
             return JsonResponse(
                 {"message": "Invalid owner."},
                 status=400,
             )
         # verify that answerHash is an answer for this contract and was posted by this answerer
-        answerInfoMap = contract.caller.answerInfoMap()
-        if not answerHash in answerInfoMap.keys():
+        answerer = contract.caller.answerInfoMap(hexbytes.HexBytes(answerHash))
+        if answerer == ("0x" + 40*"0"):
             return JsonResponse(
                 {"message": "Invalid answerHash."},
                 status=400,
             )
-        answerer = answerInfoMap[answerHash]
         if answerer != request.user.wallet:
             return JsonResponse(
                 {"message": "Invalid answerer."},
                 status=400,
             )
         answerer, _ = User.objects.get_or_create(wallet=answerer)
-        status = "SE" if answerHash == contract.caller.selectedAnswer() else "UN"
+        status = "SE" if answerHash == contract.caller.selectedAnswer().hex() else "UN"
     else:
         status = "OP"
     # make post
@@ -228,7 +234,7 @@ def answer(request):
     answer = Answer.objects.create(
         post=post,
         question=question,
-        answerHash=answerHash,
+        answerHash=hexbytes.HexBytes(answerHash),
         answerer=answerer,
         status=status,
     )
