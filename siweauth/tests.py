@@ -203,7 +203,7 @@ class TestGetJWTToken(TestCase):
     def test_get_token_siwe(self):
         message_serialized = [x.decode() for x in self.encoded_message]
         signed_message_serialized = [
-            self.signed_message.messageHash.hex(),
+            self.signed_message.message_hash.hex(),
             self.signed_message.r,
             self.signed_message.s,
             self.signed_message.v,
@@ -237,7 +237,7 @@ class TestGetJWTToken(TestCase):
     def test_use_token(self):
         message_serialized = [x.decode() for x in self.encoded_message]
         signed_message_serialized = [
-            self.signed_message.messageHash.hex(),
+            self.signed_message.message_hash.hex(),
             self.signed_message.r,
             self.signed_message.s,
             self.signed_message.v,
@@ -284,7 +284,7 @@ class TestCheckForSiwe(TestCase):
         )
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
@@ -304,7 +304,7 @@ class TestCheckForSiwe(TestCase):
         )
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
@@ -327,7 +327,7 @@ class TestCheckForSiwe(TestCase):
             "0x" + signed_message.signature.hex()[2:][::-1]
         )  # tamper with the signature
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
@@ -371,7 +371,7 @@ Issued At: {old_time}
         # Should not authenticate with old timestamp
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
@@ -405,7 +405,7 @@ Issued At: {datetime.datetime.now()}
 
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
@@ -439,7 +439,7 @@ Issued At: {datetime.datetime.now()}
 
         message_serialized = [x.decode() for x in encoded_message]
         signed_message_serialized = [
-            signed_message.messageHash.hex(),
+            signed_message.message_hash.hex(),
             signed_message.r,
             signed_message.s,
             signed_message.v,
