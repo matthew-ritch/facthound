@@ -185,7 +185,7 @@ class TestQuestions(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(content["message"], "Invalid owner.")
 
-    def test_question_invalid_asker(self):
+    def test_question_unexpected_questionHash(self):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
@@ -203,6 +203,8 @@ class TestQuestions(TestCase):
         ).transact({"from": self.oracle, "value": 1})
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         question_dict["questionAddress"] = tx_receipt["contractAddress"]
+        #modify text so the hash does not match
+        question_dict["text"] = question_dict["text"] + "HA!"
         request = self.factory.post(
             "/api/question/",
             question_dict,
@@ -211,7 +213,7 @@ class TestQuestions(TestCase):
         response = views.question(request)
         content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(content["message"], "Invalid asker.")
+        self.assertEqual(content["message"], "Unexpected questionHash.")
 
 
 class TestAnswers(TestCase):
@@ -396,7 +398,37 @@ class TestAnswers(TestCase):
             content["message"],
             "This question does not match this questionAddress.",
         )
-
+    
+    def test_unexpected_answerHash(self):
+        answerString = "You should do nothing."
+        answerHash = Web3.solidity_keccak(
+            ["address", "string"], [self.answerer, answerString]
+        )
+        # make answer object
+        self.questionContract.functions.createAnswer(answerHash).transact(
+            {"from": self.answerer}
+        )
+        # post it
+        post_dict = {
+            "thread": self.thread.pk,
+            "text": "You should do nothing." + "HA!", # add to the text so the hash will be invalid
+            "question": self.question.pk,
+            "questionAddress": self.questionContract.address,
+            "answerHash": answerHash.hex(),
+        }
+        request = self.factory.post(
+            "/api/post/",
+            post_dict,
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            content["message"],
+            "Unexpected answerHash.",
+        )
+    
     def test_wrong_answerHash_fails(self):
         answerString = "You should do nothing."
         answerHash = Web3.solidity_keccak(
@@ -412,7 +444,7 @@ class TestAnswers(TestCase):
         # post it
         post_dict = {
             "thread": self.thread.pk,
-            "text": "You should do nothing.",
+            "text": "You should do nothing.wrongend",
             "question": self.question.pk,
             "questionAddress": self.questionContract.address,
             "answerHash": wrongAnswerHash.hex(),

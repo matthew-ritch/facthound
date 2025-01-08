@@ -88,13 +88,13 @@ class TestNormalAuth(TestCase):
     def test_create_new_user(self):
         user = User.objects.create_user_username_email_password(self.username, self.email, self.raw_password)
         self.assertIsNotNone(User.objects.filter(username = self.username, email = self.email).first())
-        self.assertEquals(user, User.objects.filter(username = self.username, email = self.email).first())
+        self.assertEqual(user, User.objects.filter(username = self.username, email = self.email).first())
 
     def test_authenticate_new_user(self):
         user = User.objects.create_user_username_email_password(self.username, self.email, self.raw_password)
         authuser = authenticate(username=self.username, password=self.raw_password)
         self.assertIsNotNone(authuser)
-        self.assertEquals(user, authuser)
+        self.assertEqual(user, authuser)
     
     def test_authenticate_fails_unset_user(self):
         authuser = authenticate(username=self.username, password=self.raw_password)
