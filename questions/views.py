@@ -1,4 +1,3 @@
-# TODO verify hashs are correct in contracts
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -111,11 +110,13 @@ def question(request):
                 status=400,
             )
         questionHash = contract.caller.questionHash()
-        contract.caller.questionHash()
+        expectedQuestionHash = Web3.solidity_keccak(
+            ["address", "string"], [asker.wallet, text]
+        )
         asker = contract.caller.asker()
-        if asker != request.user.wallet:
+        if questionHash != expectedQuestionHash:
             return JsonResponse(
-                {"message": "Invalid asker."},
+                {"message": "Unexpected questionHash."},
                 status=400,
             )
         asker, _ = User.objects.get_or_create(wallet=asker)
@@ -212,9 +213,18 @@ def answer(request):
                 {"message": "Invalid owner."},
                 status=400,
             )
+        expectedAnswerHash = Web3.solidity_keccak(
+            ["address", "string"], [answerer.wallet, text]
+        )
+        answerHash = hexbytes.HexBytes(answerHash)
+        if answerHash != expectedAnswerHash:
+            return JsonResponse(
+                {"message": "Unexpected answerHash."},
+                status=400,
+            )
         # verify that answerHash is an answer for this contract and was posted by this answerer
-        answerer = contract.caller.answerInfoMap(hexbytes.HexBytes(answerHash))
-        if answerer == ("0x" + 40*"0"):
+        answerer = contract.caller.answerInfoMap(answerHash)
+        if answerer == ("0x" + 40 * "0"):
             return JsonResponse(
                 {"message": "Invalid answerHash."},
                 status=400,
@@ -234,7 +244,7 @@ def answer(request):
     answer = Answer.objects.create(
         post=post,
         question=question,
-        answerHash=hexbytes.HexBytes(answerHash),
+        answerHash=answerHash,
         answerer=answerer,
         status=status,
     )
