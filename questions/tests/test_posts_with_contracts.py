@@ -27,7 +27,8 @@ provider = EthereumTesterProvider()
 w3 = Web3(provider)
 views.w3 = w3
 
-question_contract = json.load(open("contracts/question.json"))
+with open("contracts/question.json", "rb") as f:
+    question_contract = json.load(f)
 
 
 # guide: https://web3py.readthedocs.io/en/v5/examples.html#contract-unit-tests-in-python
@@ -203,7 +204,7 @@ class TestQuestions(TestCase):
         ).transact({"from": self.oracle, "value": 1})
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         question_dict["questionAddress"] = tx_receipt["contractAddress"]
-        #modify text so the hash does not match
+        # modify text so the hash does not match
         question_dict["text"] = question_dict["text"] + "HA!"
         request = self.factory.post(
             "/api/question/",
@@ -398,7 +399,7 @@ class TestAnswers(TestCase):
             content["message"],
             "This question does not match this questionAddress.",
         )
-    
+
     def test_unexpected_answerHash(self):
         answerString = "You should do nothing."
         answerHash = Web3.solidity_keccak(
@@ -411,7 +412,8 @@ class TestAnswers(TestCase):
         # post it
         post_dict = {
             "thread": self.thread.pk,
-            "text": "You should do nothing." + "HA!", # add to the text so the hash will be invalid
+            "text": "You should do nothing."
+            + "HA!",  # add to the text so the hash will be invalid
             "question": self.question.pk,
             "questionAddress": self.questionContract.address,
             "answerHash": answerHash.hex(),
@@ -428,7 +430,7 @@ class TestAnswers(TestCase):
             content["message"],
             "Unexpected answerHash.",
         )
-    
+
     def test_wrong_answerHash_fails(self):
         answerString = "You should do nothing."
         answerHash = Web3.solidity_keccak(

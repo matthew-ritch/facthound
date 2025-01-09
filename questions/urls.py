@@ -12,11 +12,11 @@ router.register(r"questions", views.QuestionViewSet, basename="question")
 router.register(r"answers", views.AnswerViewSet, basename="answer")
 router.register(r"tags", views.TagViewSet, basename="tag")
 
-# The API URLs are now determined automatically by the router.
 urlpatterns = [
     path("", include(router.urls)),
-    path("/api/post/", include(router.urls)),
-    path('api/post/', views.post, name='post'),
-    path('api/question/', views.question, name='question'),
-    path('api/answer/', views.answer, name='answer'),
+    path("api/post/", views.post, name="post"),
+    path("api/question/", views.question, name="question"),
+    path("api/answer/", views.answer, name="answer"),
+    path("api/selection/", views.selection, name="selection"),
+    path("api/search/", views.search, name="search"),
 ]

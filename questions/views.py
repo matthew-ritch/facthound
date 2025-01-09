@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.db.models import Count, Case, When, IntegerField
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
@@ -28,7 +29,8 @@ w3 = Web3(
         f"{os.getenv('ALCHEMY_API_ENDPOINT')}/{os.getenv('ALCHEMY_API_KEY')}"
     )
 )
-question_contract = json.load(open("contracts/question.json"))
+with open("contracts/question.json", "rb") as f:
+    question_contract = json.load(f)
 question_abi = question_contract["abi"]
 question_bytecode = question_contract["bytecode"]["object"]
 
@@ -253,6 +255,77 @@ def answer(request):
             "message": "answer posted",
             "thread": post.thread.pk,
             "post": post.pk,
+            "question": question.pk,
+            "answer": answer.pk,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def selection(request):
+    question = request.data.get("question")
+    answer = request.data.get("answer")
+    try:
+        question = Question.objects.get(pk=question)
+    except Question.DoesNotExist:
+        return JsonResponse({"message": "No question with that id exists."}, status=400)
+    try:
+        answer = Answer.objects.get(pk=answer)
+    except Answer.DoesNotExist:
+        return JsonResponse({"message": "No answer with that id exists."}, status=400)
+    if answer.question != question:
+        return JsonResponse(
+            {"message": "This answer does not answer this question."}, status=400
+        )
+    if question.asker.wallet != request.user.wallet:
+        return JsonResponse(
+            {"message": "Only the question's asker can do this."},
+            status=400,
+        )
+    if question.questionAddress and answer.answerHash:
+        # make sure this answer was selected in the contract
+        contract = w3.eth.contract(address=question.questionAddress, abi=question_abi)
+        selectedAnswer = contract.caller.selectedAnswer()
+        if selectedAnswer != answer.answerHash:
+            return JsonResponse(
+                {
+                    "message": f"This answer must be selected in the contract at address {question.questionAddress}."
+                },
+                status=400,
+            )
+    answer.status = "SE"
+    question.status = "AS"
+
+    answer.save()
+    question.save()
+
+    return JsonResponse(
+        {
+            "message": "answer selected",
+            "question": question.pk,
+            "answer": answer.pk,
+        }
+    )
+
+
+@api_view(["GET"])
+def search(request):
+    search_string = request.data.get("search_string")
+    components = search_string.split()
+    threads = Thread.objects.filter(post__text__icontains=components)
+    threads = threads.annotate(
+        co=Count(
+            Case(
+                When(post__text__icontains=components, then=1),
+                output_field=IntegerField(),
+            )
+        )
+    )
+
+    return JsonResponse(
+        {
+            "search_string": search_string,
             "question": question.pk,
             "answer": answer.pk,
         }
