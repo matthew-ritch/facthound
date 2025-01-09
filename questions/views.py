@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from django.db.models import Count, Case, When, IntegerField
+from django.db.models import Count, Case, When, IntegerField, Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
@@ -10,6 +10,9 @@ import os
 from web3 import Web3
 import json
 import hexbytes
+import operator
+from functools import reduce
+import numpy as np
 
 from siweauth.models import User, Nonce
 from siweauth.auth import IsAdminOrReadOnly
@@ -313,21 +316,19 @@ def selection(request):
 def search(request):
     search_string = request.data.get("search_string")
     components = search_string.split()
-    threads = Thread.objects.filter(post__text__icontains=components)
-    threads = threads.annotate(
-        co=Count(
-            Case(
-                When(post__text__icontains=components, then=1),
-                output_field=IntegerField(),
-            )
-        )
-    )
+
+    posts = posts.objects.filter(
+        reduce(operator.or_, (Q(text__icontains=x) for x in components))
+    ).distinct()
+
+    threads = posts.values_list("thread", flat=True)
+    th, c = np.unique(threads, return_counts=True)
+    th = th[np.argsort(-c)]
 
     return JsonResponse(
         {
             "search_string": search_string,
-            "question": question.pk,
-            "answer": answer.pk,
+            "threads": list(th)
         }
     )
 
