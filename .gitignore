@@ -3,6 +3,7 @@ notes.txt
 todo.txt
 .DS_Store
 .vscode/*
+*.pyc
 
 fh
 

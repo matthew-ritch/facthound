@@ -21,24 +21,26 @@ from questions.serializers import (
     TagSerializer,
 )
 
+class BaseTestCase(TestCase):
+    def setUp(self):
+        # change views's w3 provider to this test provider
+        self.provider = EthereumTesterProvider()
+        self.w3 = Web3(self.provider)
+        views.w3 = self.w3
 
-# change views's w3 provider to this test provider
-provider = EthereumTesterProvider()
-w3 = Web3(provider)
-views.w3 = w3
-
-with open("contracts/question.json", "rb") as f:
-    question_contract = json.load(f)
+        with open("contracts/question.json", "rb") as f:
+            self.question_contract = json.load(f)
 
 
 # guide: https://web3py.readthedocs.io/en/v5/examples.html#contract-unit-tests-in-python
 
 
-class TestQuestions(TestCase):
+class TestQuestions(BaseTestCase):
     def setUp(self):
+        super().setUp()
         self.factory = RequestFactory()
         #
-        self.eth_tester = provider.ethereum_tester
+        self.eth_tester = self.provider.ethereum_tester
         self.owner = self.eth_tester.get_accounts()[0]
         self.oracle = self.eth_tester.get_accounts()[1]
         self.asker = self.eth_tester.get_accounts()[2]
@@ -52,9 +54,9 @@ class TestQuestions(TestCase):
             "tags": ["A", "B", "C"],
         }
         # deploy question
-        abi = question_contract["abi"]
-        bytecode = question_contract["bytecode"]["object"]
-        questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        abi = self.question_contract["abi"]
+        bytecode = self.question_contract["bytecode"]["object"]
+        questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.asker, question_dict["text"]]
         )
@@ -62,7 +64,7 @@ class TestQuestions(TestCase):
             self.owner, self.oracle, self.asker, questionHash
         ).transact({"from": self.asker, "value": 1})
         # wait for the transaction to be mined
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         # pack the required info
         question_dict["questionAddress"] = tx_receipt["contractAddress"]
         # post about question
@@ -165,16 +167,16 @@ class TestQuestions(TestCase):
             "tags": ["A", "B", "C"],
         }
         # deploy question with invalid owner
-        abi = question_contract["abi"]
-        bytecode = question_contract["bytecode"]["object"]
-        questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        abi = self.question_contract["abi"]
+        bytecode = self.question_contract["bytecode"]["object"]
+        questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.asker, question_dict["text"]]
         )
         tx_hash = questionContract.constructor(
             self.oracle, self.oracle, self.asker, questionHash
         ).transact({"from": self.asker, "value": 1})
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         question_dict["questionAddress"] = tx_receipt["contractAddress"]
         request = self.factory.post(
             "/api/question/",
@@ -193,16 +195,16 @@ class TestQuestions(TestCase):
             "tags": ["A", "B", "C"],
         }
         # deploy question with invalid asker
-        abi = question_contract["abi"]
-        bytecode = question_contract["bytecode"]["object"]
-        questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        abi = self.question_contract["abi"]
+        bytecode = self.question_contract["bytecode"]["object"]
+        questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.oracle, question_dict["text"]]
         )
         tx_hash = questionContract.constructor(
             self.owner, self.oracle, self.oracle, questionHash
         ).transact({"from": self.oracle, "value": 1})
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         question_dict["questionAddress"] = tx_receipt["contractAddress"]
         # modify text so the hash does not match
         question_dict["text"] = question_dict["text"] + "HA!"
@@ -217,11 +219,12 @@ class TestQuestions(TestCase):
         self.assertEqual(content["message"], "Unexpected questionHash.")
 
 
-class TestAnswers(TestCase):
+class TestAnswers(BaseTestCase):
     def setUp(self):
+        super().setUp()
         self.factory = RequestFactory()
         #
-        self.eth_tester = provider.ethereum_tester
+        self.eth_tester = self.provider.ethereum_tester
         self.owner = self.eth_tester.get_accounts()[0]
         self.oracle = self.eth_tester.get_accounts()[1]
         self.asker = self.eth_tester.get_accounts()[2]
@@ -236,9 +239,9 @@ class TestAnswers(TestCase):
             "tags": ["A", "B", "C"],
         }
         # deploy question
-        abi = question_contract["abi"]
-        bytecode = question_contract["bytecode"]["object"]
-        self.questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        abi = self.question_contract["abi"]
+        bytecode = self.question_contract["bytecode"]["object"]
+        self.questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.asker, question_dict["text"]]
         )
@@ -246,8 +249,8 @@ class TestAnswers(TestCase):
             self.owner, self.oracle, self.asker, questionHash
         ).transact({"from": self.asker, "value": 1})
         # wait for the transaction to be mined
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
-        self.questionContract = w3.eth.contract(
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        self.questionContract = self.w3.eth.contract(
             address=tx_receipt["contractAddress"], abi=abi
         )
         # pack the required info

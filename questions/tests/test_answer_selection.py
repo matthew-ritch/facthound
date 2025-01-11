@@ -22,20 +22,19 @@ from questions.serializers import (
 )
 
 
-# change views's w3 provider to this test provider
-provider = EthereumTesterProvider()
-w3 = Web3(provider)
-views.w3 = w3
-
-with open("contracts/question.json", "rb") as f:
-    question_contract = json.load(f)
-
-
 # guide: https://web3py.readthedocs.io/en/v5/examples.html#contract-unit-tests-in-python
 
 
 class TestSelectionSansContracts(TestCase):
     def setUp(self):
+        # change views's w3 provider to this test provider
+        provider = EthereumTesterProvider()
+        self.w3 = Web3(provider)
+        views.w3 = self.w3
+
+        with open("contracts/question.json", "rb") as f:
+            question_contract = json.load(f)
+        #
         self.factory = RequestFactory()
         #
         self.eth_tester = provider.ethereum_tester
@@ -154,6 +153,13 @@ class TestSelectionSansContracts(TestCase):
 
 class TestSelectionWithContracts(TestCase):
     def setUp(self):
+        # change views's w3 provider to this test provider
+        provider = EthereumTesterProvider()
+        self.w3 = Web3(provider)
+        views.w3 = self.w3
+
+        with open("contracts/question.json", "rb") as f:
+            question_contract = json.load(f)
         self.factory = RequestFactory()
         #
         self.eth_tester = provider.ethereum_tester
@@ -172,15 +178,15 @@ class TestSelectionWithContracts(TestCase):
         # deploy question
         abi = question_contract["abi"]
         bytecode = question_contract["bytecode"]["object"]
-        self.questionContract = w3.eth.contract(abi=abi, bytecode=bytecode)
+        self.questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.asker, question_dict["text"]]
         )
         tx_hash = self.questionContract.constructor(
             self.owner, self.oracle, self.asker, questionHash
         ).transact({"from": self.asker, "value": 1})
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
-        self.questionContract = w3.eth.contract(
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        self.questionContract = self.w3.eth.contract(
             address=tx_receipt["contractAddress"], abi=abi
         )
         # post question
@@ -210,7 +216,7 @@ class TestSelectionWithContracts(TestCase):
         tx_hash = self.questionContract.functions.createAnswer(
             self.answer_hash
         ).transact({"from": self.answerer})
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         # post answer
         ap = Post.objects.create(
             thread=self.thread,
@@ -231,7 +237,7 @@ class TestSelectionWithContracts(TestCase):
         tx_hash = self.questionContract.functions.selectAnswer(
             self.answer_hash
         ).transact({"from": self.asker})
-        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash, 180)
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
         # select in backend
         selection_dict = {"question": self.question.pk, "answer": self.answer.pk}
         request = self.factory.post(
