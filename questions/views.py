@@ -343,6 +343,9 @@ def threadPosts(request):
     queryset = queryset.order_by("dt")
     queryset = queryset.annotate(poster_name = F("poster__username"))
     queryset = queryset.annotate(poster_wallet = F("poster__wallet"))
+    queryset = queryset.annotate(question_id = F("question"))
+    queryset = queryset.annotate(answer_id = F("answer"))
+    queryset = queryset.annotate(answering_question = F("answer__question"))
     queryset = list(queryset.values())
     return JsonResponse(
         {
