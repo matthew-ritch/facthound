@@ -1,5 +1,5 @@
 from django.http import JsonResponse
-from django.db.models import Count, Case, When, IntegerField, Q
+from django.db.models import Count, Case, When, IntegerField, Q, F
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
@@ -314,21 +314,40 @@ def selection(request):
 
 @api_view(["GET"])
 def search(request):
-    search_string = request.data.get("search_string")
+    search_string = request.GET.get("search_string")
     components = search_string.split()
 
-    posts = posts.objects.filter(
+    posts = Post.objects.filter(
         reduce(operator.or_, (Q(text__icontains=x) for x in components))
     ).distinct()
 
     threads = posts.values_list("thread", flat=True)
     th, c = np.unique(threads, return_counts=True)
     th = th[np.argsort(-c)]
+    th = [int(x) for x in th]
 
     return JsonResponse(
         {
             "search_string": search_string,
             "threads": list(th)
+        }
+    )
+
+
+@api_view(["GET"])
+def threadPosts(request):
+    queryset = Post.objects.all()
+    threadId = request.query_params.get('threadId')
+    if threadId is not None:
+        queryset = queryset.filter(thread__pk=threadId)
+    queryset = queryset.order_by("dt")
+    queryset = queryset.annotate(poster_name = F("poster__username"))
+    queryset = queryset.annotate(poster_wallet = F("poster__wallet"))
+    queryset = list(queryset.values())
+    return JsonResponse(
+        {
+            "threadId": threadId,
+            "posts": queryset
         }
     )
 

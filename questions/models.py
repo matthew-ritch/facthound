@@ -24,7 +24,7 @@ class Post(models.Model):
     poster = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.thread.topic}: reply {self.pk}"
+        return f"{self.thread.topic}: reply {list(self.thread.post_set.all().order_by('dt')).index(self)}"
 
 
 class Question(models.Model):
@@ -53,7 +53,7 @@ class Question(models.Model):
     )
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.asker}'s question {self.pk}"
+        return f"{self.post.thread.topic}: {self.asker}'s question {list(self.thread.post_set.filter(question__isnull = False).order_by('dt')).index(self.post)}"
 
 
 class Answer(models.Model):
@@ -72,7 +72,7 @@ class Answer(models.Model):
     )
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.answerer}'s answer {self.pk}"
+        return f"{self.post.thread.topic}: {self.answerer}'s answer {list(self.thread.post_set.filter(answer__isnull = False).order_by('dt')).index(self.post)}"
 
 
 class Tag(models.Model):
