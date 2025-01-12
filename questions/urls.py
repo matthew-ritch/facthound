@@ -20,4 +20,5 @@ urlpatterns = [
     path("api/selection/", views.selection, name="selection"),
     path("api/search/", views.search, name="search"),
     path("api/thread/", views.threadPosts, name="threadposts"),
+    path("api/threadlist/", views.threadList, name="threadlist"),
 ]

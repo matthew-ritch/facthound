@@ -1,5 +1,15 @@
 from django.http import JsonResponse
-from django.db.models import Count, Case, When, IntegerField, Q, F
+from django.db.models import (
+    Count,
+    Case,
+    When,
+    IntegerField,
+    Q,
+    F,
+    Sum,
+    Subquery,
+    OuterRef,
+)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets
@@ -326,33 +336,60 @@ def search(request):
     th = th[np.argsort(-c)]
     th = [int(x) for x in th]
 
-    return JsonResponse(
-        {
-            "search_string": search_string,
-            "threads": list(th)
-        }
+    return JsonResponse({"search_string": search_string, "threads": list(th)})
+
+
+@api_view(["GET"])
+def threadList(request):
+    queryset = Thread.objects.all().order_by("-dt")
+    queryset = queryset.annotate(
+        first_poster_wallet=Subquery(
+            Post.objects.filter(thread=OuterRef("pk"))
+            .order_by("dt")
+            .values("poster__wallet")[:1]
+        ),
+        first_poster_name=Subquery(
+            Post.objects.filter(thread=OuterRef("pk"))
+            .order_by("dt")
+            .values("poster__username")[:1]
+        ),
+        total_bounty=Sum(
+            Subquery(
+                Question.objects.filter(
+                    post__thread=OuterRef("pk"), bounty__isnull=False, status="OP"
+                ).values("bounty")
+            )
+        ),
     )
+    queryset = list(queryset.values())
+    return JsonResponse({"threads": queryset})
 
 
 @api_view(["GET"])
 def threadPosts(request):
     queryset = Post.objects.all()
-    threadId = request.query_params.get('threadId')
+    threadId = request.query_params.get("threadId")
     if threadId is not None:
         queryset = queryset.filter(thread__pk=threadId)
     queryset = queryset.order_by("dt")
-    queryset = queryset.annotate(poster_name = F("poster__username"))
-    queryset = queryset.annotate(poster_wallet = F("poster__wallet"))
-    queryset = queryset.annotate(question_id = F("question"))
-    queryset = queryset.annotate(answer_id = F("answer"))
-    queryset = queryset.annotate(answering_question = F("answer__question"))
-    queryset = list(queryset.values())
-    return JsonResponse(
-        {
-            "threadId": threadId,
-            "posts": queryset
-        }
+    queryset = queryset.annotate(poster_name=F("poster__username"))
+    queryset = queryset.annotate(poster_wallet=F("poster__wallet"))
+    queryset = queryset.annotate(
+        question_id=Case(
+            When(question__isnull=True, then=F("answer__question")),
+            default=F("question"),
+        )
     )
+    queryset = queryset.annotate(
+        question_address=Case(
+            When(question__isnull=True, then=F("answer__question__questionAddress")),
+            default=F("question__questionAddress"),
+        )
+    )
+    queryset = queryset.annotate(answer_id=F("answer"))
+    queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
+    queryset = list(queryset.values())
+    return JsonResponse({"threadId": threadId, "posts": queryset})
 
 
 # viewsets for simple crud.
