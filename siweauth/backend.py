@@ -2,10 +2,20 @@ from django.contrib.auth.backends import BaseBackend
 
 from web3 import Web3
 from eth_account.messages import SignableMessage
+import logging
 
 from siweauth.models import User
 from siweauth.auth import check_for_siwe
 
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logging.basicConfig(
+    filename="facthound.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 w3 = Web3()
 

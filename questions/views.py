@@ -23,6 +23,7 @@ import hexbytes
 import operator
 from functools import reduce
 import numpy as np
+import logging
 
 from siweauth.models import User, Nonce
 from siweauth.auth import IsAdminOrReadOnly
@@ -36,6 +37,14 @@ from questions.serializers import (
 )
 from questions.settings import allowed_owners
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler())
+logging.basicConfig(
+    filename="facthound.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 w3 = Web3(
     Web3.HTTPProvider(
@@ -85,6 +94,7 @@ def post(request):
         )
     # make post
     post = _make_post(request.user, text, thread, topic, tags)
+    
     return JsonResponse(
         {"message": "post created", "thread": post.thread.pk, "post": post.pk}
     )
@@ -162,6 +172,7 @@ def question(request):
         bounty=bounty,
         status=status,
     )
+    
     return JsonResponse(
         {
             "message": "question posted",
@@ -263,6 +274,7 @@ def answer(request):
         answerer=answerer,
         status=status,
     )
+    
     return JsonResponse(
         {
             "message": "answer posted",
@@ -312,6 +324,7 @@ def selection(request):
 
     answer.save()
     question.save()
+    
 
     return JsonResponse(
         {
@@ -335,6 +348,7 @@ def search(request):
     th, c = np.unique(threads, return_counts=True)
     th = th[np.argsort(-c)]
     th = [int(x) for x in th]
+    
 
     return JsonResponse({"search_string": search_string, "threads": list(th)})
 
@@ -362,6 +376,7 @@ def threadList(request):
         ),
     )
     queryset = list(queryset.values())
+    
     return JsonResponse({"threads": queryset})
 
 
@@ -389,6 +404,7 @@ def threadPosts(request):
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
     queryset = list(queryset.values())
+    
     return JsonResponse({"threadId": threadId, "posts": queryset})
 
 
