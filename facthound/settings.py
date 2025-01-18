@@ -43,11 +43,13 @@ INSTALLED_APPS = [
     "siweauth.apps.SiweauthConfig",
     "rest_framework",
     "rest_framework_simplejwt",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -142,7 +144,11 @@ AUTH_USER_MODEL = "siweauth.User"
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend', "siweauth.backend.SiweBackend"]
 
 # CORS
-
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3030',
+    'http://localhost:3000',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
 ]
