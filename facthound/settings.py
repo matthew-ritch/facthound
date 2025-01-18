@@ -140,3 +140,9 @@ REST_FRAMEWORK = {
 
 AUTH_USER_MODEL = "siweauth.User"
 AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend', "siweauth.backend.SiweBackend"]
+
+# CORS
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3030',
+]
