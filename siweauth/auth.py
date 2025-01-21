@@ -6,8 +6,10 @@ import datetime, pytz
 from web3 import Web3
 from hexbytes import HexBytes
 from eth_account.messages import SignableMessage
+from eth_account.messages import encode_defunct
 from eth_account.datastructures import SignedMessage
 from datetime import datetime
+
 
 from siweauth.settings import (
     SIWE_MESSAGE_VALIDITY,
@@ -79,13 +81,11 @@ def parse_siwe_message(message_body: str) -> dict:
 
 
 def check_for_siwe(message, signed_message):
-    message = SignableMessage(*[x.encode() if type(x) == str else x for x in message])
-    signed_message = SignedMessage(*signed_message)
     # check for format
-    if type(message.body) != str:
-        body = str(message.body.decode())
+    if type(message) != str:
+        body = str(message.decode())
     else:
-        body = message.body
+        body = message
     len(body.split("\n")) >= 7
     # Parse message components
     parsed = parse_siwe_message(body)
@@ -109,12 +109,11 @@ def check_for_siwe(message, signed_message):
     # check for nonce in db
     if not _nonce_is_valid(parsed["nonce"]):
         return None
-
     # recover address from nonce / signed message
     address = parsed["address"]
     try:
         recovered_address = w3.eth.account.recover_message(
-            signable_message=message, signature=HexBytes(signed_message.signature)
+            signable_message=encode_defunct(text=body), signature=HexBytes(signed_message)
         )
     except:
         return None

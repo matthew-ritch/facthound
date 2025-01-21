@@ -6,6 +6,7 @@ from typing import Any, Dict
 from eth_account.messages import SignableMessage
 from eth_account.datastructures import SignedMessage
 
+from siweauth.auth import parse_siwe_message
 
 class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -18,17 +19,16 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
 
     @classmethod
     def get_token(cls, user):
-        token = super().get_token(user)
+        if user:
+            token = super().get_token(user)
+        else:
+            token=None
         return token
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[Any, Any]:
         authenticate_kwargs = {
-            "message": SignableMessage(
-                *self.context["request"].POST.getlist("message")
-            ),
-            "signed_message": SignedMessage(
-                *self.context["request"].POST.getlist("signed_message")
-            ),
+            "message": self.context["request"].data["message"],
+            "signed_message": self.context["request"].data["signed_message"]
         }
         try:
             authenticate_kwargs["request"] = self.context["request"]
