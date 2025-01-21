@@ -7,7 +7,7 @@ SIWE_MESSAGE_VALIDITY = getattr(settings, 'SIWE_MESSAGE_VALIDITY', 5)
 SIWE_CHAIN_ID = getattr(settings, 'SIWE_CHAIN_ID', 1)
 
 # Expected domain for SIWE messages
-SIWE_DOMAIN = getattr(settings, 'SIWE_DOMAIN', 'testhost')
+SIWE_DOMAIN = getattr(settings, 'SIWE_DOMAIN', 'localhost:3000')
 
 # Expected URI for SIWE messages
-SIWE_URI = getattr(settings, 'SIWE_URI', 'https://testhost/api/token/')
+SIWE_URI = getattr(settings, 'SIWE_URI', 'http://localhost:3000')
