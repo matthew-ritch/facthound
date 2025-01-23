@@ -7,6 +7,7 @@ from eth_account.messages import SignableMessage
 from eth_account.datastructures import SignedMessage
 
 from siweauth.auth import parse_siwe_message
+from siweauth.models import User
 
 class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -43,3 +44,10 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
         data["access"] = str(refresh.access_token)
 
         return data
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('username', 'password', 'email')
+        extra_kwargs = {'password': {'write_only': True}}

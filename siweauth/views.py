@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import generics
 
 import datetime
 import pytz
@@ -12,7 +13,8 @@ from django.views.decorators.http import require_http_methods
 from django.http import JsonResponse
 
 from siweauth.models import User, Nonce
-from siweauth.serializers import SIWETokenObtainPairSerializer
+from siweauth.serializers import SIWETokenObtainPairSerializer, UserSerializer
+
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -55,3 +57,9 @@ class TokenObtainPairView(TokenObtainPairView):
 @permission_classes([IsAuthenticated])
 def who_am_i(request):
     return JsonResponse({"message": request.user.wallet})
+
+class CreateUserView(generics.CreateAPIView):
+    def has_permission(self, request, view):
+        return request.method == 'POST'
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
