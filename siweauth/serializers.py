@@ -37,6 +37,8 @@ class SIWETokenObtainPairSerializer(TokenObtainPairSerializer):
             pass
 
         self.user = authenticate(**authenticate_kwargs)
+        if self.user is None:
+            return None
         refresh = self.get_token(self.user)
         data = {}
 

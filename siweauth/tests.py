@@ -13,12 +13,12 @@ from siweauth.auth import check_for_siwe, _nonce_is_valid
 
 
 def make_message(address, nonce):
-    message = f"""testhost wants you to sign in with your Ethereum account:
+    message = f"""localhost:3000 wants you to sign in with your Ethereum account:
 {address}
 
 To make posts.
 
-URI: https://testhost/api/token/
+URI: http://localhost:3000
 Version: 1
 Chain ID: 1
 Nonce: {nonce}
@@ -127,11 +127,11 @@ class TestSiweAuth(TestCase):
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        signature = signed_message.signature
+        wallet = authenticate(message=message, signed_message=signature)
         self.assertIsNotNone(wallet)
         # try again with same nonce - will not work
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        wallet = authenticate(message=message, signed_message=signature)
         self.assertIsNone(wallet)
 
     def test_authenticate_returning_user(self):
@@ -144,11 +144,11 @@ class TestSiweAuth(TestCase):
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        signature = signed_message.signature.hex()
+        wallet = authenticate(message=message, signed_message=signature)
         self.assertIsNotNone(wallet)
         # try again with same nonce - will not work
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        wallet = authenticate(message=message, signed_message=signed_message)
         self.assertIsNone(wallet)
         # make new nonce and message
         self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 1)
@@ -161,12 +161,12 @@ class TestSiweAuth(TestCase):
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        signature = signed_message.signature.hex()
+        wallet = authenticate(message=message, signed_message=signature)
         self.assertIsNotNone(wallet)
         self.assertEqual(len(User.objects.filter(wallet=self.acc.address)), 1)
         # try again with same nonce - will not work
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        wallet = authenticate(message=message, signed_message=signature)
         self.assertIsNone(wallet)
 
     def test_invalid_nonce(self):
@@ -179,7 +179,7 @@ class TestSiweAuth(TestCase):
             self.w3.to_hex(self.acc.key),
         )
         # try to authenticate with the invalid nonce
-        wallet = authenticate(message=encoded_message, signed_message=signed_message)
+        wallet = authenticate(message=message, signed_message=signed_message)
         self.assertIsNone(wallet)
 
 
@@ -282,16 +282,9 @@ class TestCheckForSiwe(TestCase):
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-        message_serialized = [x.decode() for x in encoded_message]
-        signed_message_serialized = [
-            signed_message.message_hash.hex(),
-            signed_message.r,
-            signed_message.s,
-            signed_message.v,
-            signed_message.signature.hex(),
-        ]
+        signature = signed_message.signature.hex()
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signature
         )
         self.assertEqual(recovered_address, self.acc.address)
 
@@ -302,16 +295,9 @@ class TestCheckForSiwe(TestCase):
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-        message_serialized = [x.decode() for x in encoded_message]
-        signed_message_serialized = [
-            signed_message.message_hash.hex(),
-            signed_message.r,
-            signed_message.s,
-            signed_message.v,
-            signed_message.signature.hex(),
-        ]
+        signature = signed_message.signature
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signature
         )
         self.assertIsNone(recovered_address)
 
@@ -334,7 +320,7 @@ class TestCheckForSiwe(TestCase):
             tampered_signature_string,
         ]
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signed_message_serialized
         )
         self.assertIsNone(recovered_address)
 
@@ -351,12 +337,12 @@ class TestSecurityVulnerabilities(TestCase):
     def test_old_timestamp_acceptance(self):
         # Create message with old timestamp
         old_time = datetime.datetime.now() - datetime.timedelta(days=7)
-        message = f"""testhost wants you to sign in with your Ethereum account:
+        message = f"""localhost:3000 wants you to sign in with your Ethereum account:
 {self.acc.address}
 
 To make posts.
 
-URI: https://testhost/api/token/
+URI: http://localhost:3000
 Version: 1
 Chain ID: 1
 Nonce: {self.nonce}
@@ -367,18 +353,10 @@ Issued At: {old_time}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
+        signature = signed_message.signature.hex()
         # Should not authenticate with old timestamp
-        message_serialized = [x.decode() for x in encoded_message]
-        signed_message_serialized = [
-            signed_message.message_hash.hex(),
-            signed_message.r,
-            signed_message.s,
-            signed_message.v,
-            signed_message.signature.hex(),
-        ]
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signature
         )
         self.assertIsNone(
             recovered_address
@@ -402,17 +380,9 @@ Issued At: {datetime.datetime.now()}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
-        message_serialized = [x.decode() for x in encoded_message]
-        signed_message_serialized = [
-            signed_message.message_hash.hex(),
-            signed_message.r,
-            signed_message.s,
-            signed_message.v,
-            signed_message.signature.hex(),
-        ]
+        signature = signed_message.signature.hex()
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signature
         )
         self.assertIsNone(
             recovered_address
@@ -436,17 +406,9 @@ Issued At: {datetime.datetime.now()}
             encoded_message,
             self.w3.to_hex(self.acc.key),
         )
-
-        message_serialized = [x.decode() for x in encoded_message]
-        signed_message_serialized = [
-            signed_message.message_hash.hex(),
-            signed_message.r,
-            signed_message.s,
-            signed_message.v,
-            signed_message.signature.hex(),
-        ]
+        signature = signed_message.signature.hex()
         recovered_address = check_for_siwe(
-            message_serialized, signed_message_serialized
+            message, signature
         )
         self.assertIsNone(
             recovered_address
