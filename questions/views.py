@@ -80,7 +80,7 @@ def post(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.getlist("tags")
+    tags = request.data.get("tags")
 
     # check if params make sense
     if text is None:
@@ -96,7 +96,7 @@ def post(request):
     post = _make_post(request.user, text, thread, topic, tags)
     
     return JsonResponse(
-        {"message": "post created", "thread": post.thread.pk, "post": post.pk}
+        {"message": "success", "thread": post.thread.pk, "post": post.pk}
     )
 
 
@@ -106,7 +106,7 @@ def question(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.getlist("tags")
+    tags = request.data.get("tags")
     questionAddress = request.data.get("questionAddress")
     asker = request.user
     # check if params make sense
@@ -175,7 +175,7 @@ def question(request):
     
     return JsonResponse(
         {
-            "message": "question posted",
+            "message": "success",
             "thread": post.thread.pk,
             "post": post.pk,
             "question": question.pk,
@@ -277,7 +277,7 @@ def answer(request):
     
     return JsonResponse(
         {
-            "message": "answer posted",
+            "message": "success",
             "thread": post.thread.pk,
             "post": post.pk,
             "question": question.pk,
