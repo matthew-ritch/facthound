@@ -403,9 +403,25 @@ def threadPosts(request):
     )
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
-    queryset = list(queryset.values())
     
-    return JsonResponse({"threadId": threadId, "posts": queryset})
+    # Convert queryset to list of dicts and handle bytes serialization
+    posts = []
+    for post in queryset:
+        post_dict = {
+            'id': post.id,
+            'text': post.text,
+            'dt': post.dt,
+            'thread_id': post.thread_id,
+            'poster_name': post.poster_name,
+            'poster_wallet': post.poster_wallet,
+            'question_id': post.question_id,
+            'question_address': post.question_address,
+            'answer_id': post.answer_id,
+            'answer_hash': post.answer_hash.hex() if post.answer_hash else None
+        }
+        posts.append(post_dict)
+    
+    return JsonResponse({"threadId": threadId, "posts": posts})
 
 
 # viewsets for simple crud.
