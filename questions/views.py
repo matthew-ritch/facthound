@@ -401,6 +401,21 @@ def threadPosts(request):
             default=F("question__questionAddress"),
         )
     )
+    queryset = queryset.annotate(
+        asker_address=Case(
+            When(question__isnull=True, then=F("answer__question__asker__wallet")),
+            default=F("question__asker__wallet"),
+        )
+    )
+    queryset = queryset.annotate(
+        asker_username=Case(
+            When(question__isnull=True, then=F("answer__question__asker__username")),
+            default=F("question__asker__username"),
+        )
+    )
+    queryset = queryset.annotate(
+        answer_status=F("answer__status"),
+    )
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
     
@@ -414,6 +429,9 @@ def threadPosts(request):
             'thread_id': post.thread_id,
             'poster_name': post.poster_name,
             'poster_wallet': post.poster_wallet,
+            'asker_address': post.asker_address,
+            'asker_username': post.asker_username,
+            'answer_status': post.answer_status,
             'question_id': post.question_id,
             'question_address': post.question_address,
             'answer_id': post.answer_id,
