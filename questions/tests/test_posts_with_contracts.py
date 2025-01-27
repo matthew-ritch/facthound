@@ -51,7 +51,7 @@ class TestQuestions(BaseTestCase):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         # deploy question
         abi = self.question_contract["abi"]
@@ -112,7 +112,7 @@ class TestQuestions(BaseTestCase):
     def test_question_no_text(self):
         question_dict = {
             "topic": "sometopic",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         request = self.factory.post(
             "/api/question/",
@@ -129,7 +129,7 @@ class TestQuestions(BaseTestCase):
             "thread": 1,
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         request = self.factory.post(
             "/api/question/",
@@ -148,7 +148,7 @@ class TestQuestions(BaseTestCase):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
             "questionAddress": "0xInvalidAddress",
         }
         request = self.factory.post(
@@ -165,7 +165,7 @@ class TestQuestions(BaseTestCase):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         # deploy question with invalid owner
         abi = self.question_contract["abi"]
@@ -193,7 +193,7 @@ class TestQuestions(BaseTestCase):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         # deploy question with invalid asker
         abi = self.question_contract["abi"]
@@ -237,7 +237,7 @@ class TestAnswers(BaseTestCase):
         question_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
         # deploy question
         abi = self.question_contract["abi"]

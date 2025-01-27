@@ -66,7 +66,7 @@ def _make_post(user, text, thread=None, topic=None, tags=None):
         thread = Thread.objects.create(topic=topic, dt=now)
         if tags:
             for t in tags:
-                tag, _ = Tag.objects.get_or_create(name=t)
+                tag, _ = Tag.objects.get_or_create(name=t.lower())
                 thread.tag_set.add(tag)
     else:
         thread = Thread.objects.get(pk=thread)
@@ -386,27 +386,7 @@ def payout(request):
     })
 
 
-@api_view(["GET"])
-def search(request):
-    search_string = request.GET.get("search_string")
-    components = search_string.split()
-
-    posts = Post.objects.filter(
-        reduce(operator.or_, (Q(text__icontains=x) for x in components))
-    ).distinct()
-
-    threads = posts.values_list("thread", flat=True)
-    th, c = np.unique(threads, return_counts=True)
-    th = th[np.argsort(-c)]
-    th = [int(x) for x in th]
-    
-
-    return JsonResponse({"search_string": search_string, "threads": list(th)})
-
-
-@api_view(["GET"])
-def threadList(request):
-    queryset = Thread.objects.all().order_by("-dt")
+def annotate_threads(queryset):
     queryset = queryset.annotate(
         first_poster_wallet=Subquery(
             Post.objects.filter(thread=OuterRef("pk"))
@@ -433,9 +413,45 @@ def threadList(request):
             )
         ),
     )
-    queryset = list(queryset.values())
     
-    return JsonResponse({"threads": queryset})
+    # Manually add tags for each thread
+    threads_with_annotations = []
+    for thread in queryset:
+        thread_dict = {
+            'id': thread.id,
+            'topic': thread.topic,
+            'dt': thread.dt,
+            'first_poster_wallet': thread.first_poster_wallet,
+            'first_poster_name': thread.first_poster_name,
+            'total_bounty_available': thread.total_bounty_available,
+            'total_bounty_claimed': thread.total_bounty_claimed,
+            'tags': list(thread.tag_set.values_list('name', flat=True))
+        }
+        threads_with_annotations.append(thread_dict)
+    
+    return threads_with_annotations
+
+# Update the view functions to handle the new return type
+@api_view(["GET"])
+def threadList(request):
+    queryset = Thread.objects.all().order_by("-dt")
+    threads = annotate_threads(queryset)
+    return JsonResponse({"threads": threads})
+
+@api_view(["GET"])
+def search(request):
+    search_string = request.GET.get("search_string")
+    components = search_string.split()
+    posts = Post.objects.filter(
+        reduce(operator.or_, (Q(text__icontains=x) for x in components))
+    ).distinct()
+    threads = posts.values_list("thread", flat=True)
+    th, c = np.unique(threads, return_counts=True)
+    th = th[np.argsort(-c)]
+    th = [int(x) for x in th]
+    queryset = Thread.objects.filter(pk__in=th)
+    threads = annotate_threads(queryset)
+    return JsonResponse({"search_string": search_string, "threads": threads})
 
 
 @api_view(["GET"])

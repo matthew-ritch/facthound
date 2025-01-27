@@ -50,7 +50,7 @@ class TestPosts(TestCase):
         self.thread_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
 
     def test_start_thread(self):
@@ -193,7 +193,7 @@ class TestQuestions(TestCase):
         self.thread_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
 
     def test_start_thread(self):
@@ -356,7 +356,7 @@ class TestAnswers(TestCase):
         self.thread_dict = {
             "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
-            "tags": ["A", "B", "C"],
+            "tags": ["a", "b", "c"],
         }
 
     def test_reply_to_thread(self):
