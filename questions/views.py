@@ -335,6 +335,54 @@ def selection(request):
     )
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payout(request):
+    question = request.data.get("question")
+    answer = request.data.get("answer")
+    
+    try:
+        question = Question.objects.get(pk=question)
+    except Question.DoesNotExist:
+        return JsonResponse({"message": "No question with that id exists."}, status=400)
+    try:
+        answer = Answer.objects.get(pk=answer)
+    except Answer.DoesNotExist:
+        return JsonResponse({"message": "No answer with that id exists."}, status=400)
+        
+    if answer.question != question:
+        return JsonResponse(
+            {"message": "This answer does not answer this question."}, status=400
+        )
+        
+    if not question.questionAddress or not answer.answerHash:
+        return JsonResponse(
+            {"message": "This is not an on-chain question/answer pair."}, status=400
+        )
+        
+    # Verify contract state
+    contract = w3.eth.contract(address=question.questionAddress, abi=question_abi)
+    selected_answer = contract.caller.selectedAnswer()
+    
+    if selected_answer != answer.answerHash:
+        return JsonResponse(
+            {"message": "This answer is not selected in the contract."}, status=400
+        )
+    
+    # Update statuses
+    question.status = "RS"  # Resolved
+    answer.status = "PO"    # Paid out
+    
+    question.save()
+    answer.save()
+    
+    return JsonResponse({
+        "message": "payout processed",
+        "question": question.pk,
+        "answer": answer.pk,
+    })
+
+
 @api_view(["GET"])
 def search(request):
     search_string = request.GET.get("search_string")
@@ -367,10 +415,17 @@ def threadList(request):
             .order_by("dt")
             .values("poster__username")[:1]
         ),
-        total_bounty=Sum(
+        total_bounty_available=Sum(
             Subquery(
                 Question.objects.filter(
                     post__thread=OuterRef("pk"), bounty__isnull=False, status="OP"
+                ).values("bounty")
+            )
+        ),
+        total_bounty_claimed=Sum(
+            Subquery(
+                Question.objects.filter(
+                    post__thread=OuterRef("pk"), bounty__isnull=False, status__in=["AS", "RS"]
                 ).values("bounty")
             )
         ),
