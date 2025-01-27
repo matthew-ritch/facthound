@@ -70,7 +70,8 @@ class TestQuestions(BaseTestCase):
         # post about question
         request = self.factory.post(
             "/api/question/",
-            question_dict,
+            data=question_dict,
+            format='json'
         )
         force_authenticate(request, self.asker_user)
         response = views.question(request)

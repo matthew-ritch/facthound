@@ -20,7 +20,7 @@ To make posts.
 
 URI: http://localhost:3000
 Version: 1
-Chain ID: 1
+Chain ID: 84532
 Nonce: {nonce}
 Issued At: {datetime.datetime.now()}
         """
@@ -344,7 +344,7 @@ To make posts.
 
 URI: http://localhost:3000
 Version: 1
-Chain ID: 1
+Chain ID: 84532
 Nonce: {self.nonce}
 Issued At: {old_time}
         """
@@ -397,7 +397,7 @@ To make posts.
 
 URI: https://malicious-site.com/api/token/
 Version: 1
-Chain ID: 1
+Chain ID: 84532
 Nonce: {self.nonce}
 Issued At: {datetime.datetime.now()}
         """

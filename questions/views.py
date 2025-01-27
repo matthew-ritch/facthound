@@ -80,7 +80,7 @@ def post(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.get("tags")
+    tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
 
     # check if params make sense
     if text is None:
@@ -106,7 +106,7 @@ def question(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.get("tags")
+    tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
     questionAddress = request.data.get("questionAddress")
     asker = request.user
     # check if params make sense

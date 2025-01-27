@@ -1,9 +1,8 @@
 from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
-from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
-
+from django.contrib.auth.hashers import make_password
 from web3 import Web3
 
 
@@ -46,16 +45,17 @@ class UserManager(BaseUserManager):
 
         email = self.normalize_email(email)
         user = self.model(email=email, username=username)
-        user.set_password(password)
+        user.password = make_password(password)
         user.save()
         return user
 
-    def create_superuser(self, address):
+    def create_superuser(self, username, password):
         """
         Creates and saves a superuser with the given eth address
         """
-        u = self.create_user(address)
+        u = self.create_user_username_email_password(username, "matt.ritch.33@gmail.com", password)
         u.is_admin = True
+        u.is_staff = True
         u.save(using=self._db)
         return u
 
@@ -75,8 +75,18 @@ class User(AbstractBaseUser):
     username = models.CharField(max_length=150, blank=True, null=True, unique=True)
     email = models.CharField(max_length=150, blank=True, null=True, unique=True)
     is_admin = models.BooleanField(default=False)
+    is_staff = models.BooleanField(default=False)
     objects = UserManager()
 
     # TODO is this the right way to handle this?
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = []
+
+    def has_perm(self, perm, obj=None):
+        return self.is_admin
+
+    def has_module_perms(self, app_label):
+        return self.is_admin
+
+    def __str__(self):
+        return self.username or self.wallet or "User"
