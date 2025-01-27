@@ -319,6 +319,9 @@ def selection(request):
                 },
                 status=400,
             )
+    # Set all other answers to unselected
+    Answer.objects.filter(question=question).exclude(pk=answer.pk).update(status='UN')
+    # Set selected answer and question status
     answer.status = "SE"
     question.status = "AS"
 
