@@ -32,7 +32,7 @@ class TestSelectionSansContracts(TestCase):
         self.w3 = Web3(provider)
         views.w3 = self.w3
 
-        with open("contracts/question.json", "rb") as f:
+        with open("contracts/Question.json", "rb") as f:
             question_contract = json.load(f)
         #
         self.factory = RequestFactory()
@@ -158,7 +158,7 @@ class TestSelectionWithContracts(TestCase):
         self.w3 = Web3(provider)
         views.w3 = self.w3
 
-        with open("contracts/question.json", "rb") as f:
+        with open("contracts/Question.json", "rb") as f:
             question_contract = json.load(f)
         self.factory = RequestFactory()
         #

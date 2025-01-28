@@ -28,7 +28,7 @@ class BaseTestCase(TestCase):
         self.w3 = Web3(self.provider)
         views.w3 = self.w3
 
-        with open("contracts/question.json", "rb") as f:
+        with open("contracts/Question.json", "rb") as f:
             self.question_contract = json.load(f)
 
 

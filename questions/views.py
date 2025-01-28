@@ -51,7 +51,7 @@ w3 = Web3(
         f"{os.getenv('ALCHEMY_API_ENDPOINT')}/{os.getenv('ALCHEMY_API_KEY')}"
     )
 )
-with open("contracts/question.json", "rb") as f:
+with open("contracts/Question.json", "rb") as f:
     question_contract = json.load(f)
 question_abi = question_contract["abi"]
 question_bytecode = question_contract["bytecode"]["object"]
