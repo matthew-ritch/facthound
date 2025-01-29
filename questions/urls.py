@@ -14,12 +14,12 @@ router.register(r"tags", views.TagViewSet, basename="tag")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("api/post/", views.post, name="post"),
-    path("api/question/", views.question, name="question"),
-    path("api/answer/", views.answer, name="answer"),
-    path("api/selection/", views.selection, name="selection"),
-    path("api/payout/", views.payout, name="payout"),
-    path("api/search/", views.search, name="search"),
-    path("api/thread/", views.threadPosts, name="threadposts"),
-    path("api/threadlist/", views.threadList, name="threadlist"),
+    path("post/", views.post, name="post"),
+    path("question/", views.question, name="question"),
+    path("answer/", views.answer, name="answer"),
+    path("selection/", views.selection, name="selection"),
+    path("payout/", views.payout, name="payout"),
+    path("search/", views.search, name="search"),
+    path("thread/", views.threadPosts, name="threadposts"),
+    path("threadlist/", views.threadList, name="threadlist"),
 ]

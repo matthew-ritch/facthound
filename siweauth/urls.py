@@ -3,10 +3,10 @@ from .views import TokenObtainPairView, SIWETokenObtainPairView, CreateUserView,
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path('api/siwetoken/', SIWETokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/get_nonce/', get_nonce, name='get_nonce'),
-    path('api/who_am_i/', who_am_i, name='who_am_i'),
-    path('api/register/', CreateUserView.as_view(), name='register'),
+    path('siwetoken/', SIWETokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('get_nonce/', get_nonce, name='get_nonce'),
+    path('who_am_i/', who_am_i, name='who_am_i'),
+    path('register/', CreateUserView.as_view(), name='register'),
 ]
