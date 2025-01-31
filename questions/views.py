@@ -482,6 +482,9 @@ def threadPosts(request):
         )
     )
     queryset = queryset.annotate(
+        bounty=F("question__bounty"),
+    )
+    queryset = queryset.annotate(
         asker_username=Case(
             When(question__isnull=True, then=F("answer__question__asker__username")),
             default=F("question__asker__username"),
@@ -508,6 +511,7 @@ def threadPosts(request):
             'answer_status': post.answer_status,
             'question_id': post.question_id,
             'question_address': post.question_address,
+            'bounty': post.bounty,
             'answer_id': post.answer_id,
             'answer_hash': post.answer_hash.hex() if post.answer_hash else None
         }
