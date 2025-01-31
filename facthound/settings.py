@@ -147,11 +147,11 @@ AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend', "siweaut
 # CORS
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
+    'facthound.xyz',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:3000',
+    'facthound.xyz',
 ]
 
 SIMPLE_JWT = {
