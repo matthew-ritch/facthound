@@ -456,10 +456,13 @@ def search(request):
 
 @api_view(["GET"])
 def threadPosts(request):
+    response_dict = {}
     queryset = Post.objects.all()
     threadId = request.query_params.get("threadId")
     if threadId is not None:
         queryset = queryset.filter(thread__pk=threadId)
+        response_dict["threadId"] = threadId
+        response_dict["threadTopic"] = queryset.first().thread.topic
     queryset = queryset.order_by("dt")
     queryset = queryset.annotate(poster_name=F("poster__username"))
     queryset = queryset.annotate(poster_wallet=F("poster__wallet"))
@@ -516,8 +519,8 @@ def threadPosts(request):
             'answer_hash': post.answer_hash.hex() if post.answer_hash else None
         }
         posts.append(post_dict)
-    
-    return JsonResponse({"threadId": threadId, "posts": posts})
+    response_dict["posts"] = posts
+    return JsonResponse(response_dict)
 
 
 # viewsets for simple crud.
