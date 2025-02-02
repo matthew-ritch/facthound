@@ -443,13 +443,15 @@ def search(request):
     search_string = request.GET.get("search_string")
     components = search_string.split()
     posts = Post.objects.filter(
-        reduce(operator.or_, (Q(text__icontains=x) for x in components))
+        reduce(operator.or_, (Q(text__icontains=x)  for x in components))
     ).distinct()
     threads = posts.values_list("thread", flat=True)
     th, c = np.unique(threads, return_counts=True)
-    th = th[np.argsort(-c)]
-    th = [int(x) for x in th]
-    queryset = Thread.objects.filter(pk__in=th)
+    queryset = Thread.objects.filter(pk__in=th) | Thread.objects.filter(
+        topic__icontains=search_string
+    ) | Thread.objects.filter(tag__name__in=components)
+    queryset = queryset.order_by("-dt")
+
     threads = annotate_threads(queryset)
     return JsonResponse({"search_string": search_string, "threads": threads})
 
