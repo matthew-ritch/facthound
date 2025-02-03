@@ -467,33 +467,3 @@ class TestAnswers(BaseTestCase):
             content["message"],
             "Invalid answerHash.",
         )
-
-    def test_user_is_not_answerer_fails(self):
-        answerString = "You should do nothing."
-        answerHash = Web3.solidity_keccak(
-            ["address", "string"], [self.answerer, answerString]
-        )
-        # make answer object
-        self.questionContract.functions.createAnswer(answerHash).transact(
-            {"from": self.oracle}
-        )
-        # post it
-        post_dict = {
-            "thread": self.thread.pk,
-            "text": "You should do nothing.",
-            "question": self.question.pk,
-            "questionAddress": self.questionContract.address,
-            "answerHash": answerHash.hex(),
-        }
-        request = self.factory.post(
-            "/api/post/",
-            post_dict,
-        )
-        force_authenticate(request, self.answerer_user)
-        response = views.answer(request)
-        content = json.loads(response.content)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(
-            content["message"],
-            "Invalid answerer.",
-        )

@@ -303,11 +303,6 @@ def selection(request):
         return JsonResponse(
             {"message": "This answer does not answer this question."}, status=400
         )
-    if question.asker.wallet != request.user.wallet:
-        return JsonResponse(
-            {"message": "Only the question's asker can do this."},
-            status=400,
-        )
     if question.questionAddress and answer.answerHash:
         # make sure this answer was selected in the contract
         contract = w3.eth.contract(address=question.questionAddress, abi=question_abi)
@@ -317,6 +312,12 @@ def selection(request):
                 {
                     "message": f"This answer must be selected in the contract at address {question.questionAddress}."
                 },
+                status=400,
+            )
+    else:
+        if question.asker != request.user:
+            return JsonResponse(
+                {"message": "Only the question's asker can do this."},
                 status=400,
             )
     # Set all other answers to unselected
