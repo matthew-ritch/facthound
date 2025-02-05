@@ -147,7 +147,7 @@ def question(request):
                 status=400,
             )
         asker, _ = User.objects.get_or_create(wallet=asker)
-        bounty = w3.eth.get_balance(contract.address)
+        bounty = questionStruct.bounty
         status = (
             "CA"
             if questionStruct.status == 4
@@ -263,7 +263,7 @@ def answer(request):
             )
         # verify that answerHash is an answer for this contract and was posted by this answerer
         questionStruct = contract.caller.getQuestion(questionHash)
-        answerer = contract.caller.getAnswerer(questionHash, answerHash)
+        answerer = contract.caller.getAnswererAddress(questionHash, answerHash)
         if answerer == ("0x" + 40 * "0"):
             return JsonResponse(
                 {"message": "Invalid answerHash."},
@@ -374,7 +374,7 @@ def payout(request):
             {"message": "This answer does not answer this question."}, status=400
         )
         
-    if not question.questionAddress or not answer.answerHash:
+    if not question.contractAddress or not answer.answerHash:
         return JsonResponse(
             {"message": "This is not an on-chain question/answer pair."}, status=400
         )
@@ -491,15 +491,21 @@ def threadPosts(request):
         )
     )
     queryset = queryset.annotate(
-        question_address=Case(
-            When(question__isnull=True, then=F("answer__question__questionAddress")),
-            default=F("question__questionAddress"),
+        contract_address=Case(
+            When(question__isnull=True, then=F("answer__question__contractAddress")),
+            default=F("question__contractAddress"),
         )
     )
     queryset = queryset.annotate(
         asker_address=Case(
             When(question__isnull=True, then=F("answer__question__asker__wallet")),
             default=F("question__asker__wallet"),
+        )
+    )
+    queryset = queryset.annotate(
+        question_hash=Case(
+            When(question__isnull=True, then=F("answer__question__questionHash")),
+            default=F("question__questionHash"),
         )
     )
     queryset = queryset.annotate(
@@ -531,7 +537,8 @@ def threadPosts(request):
             'asker_username': post.asker_username,
             'answer_status': post.answer_status,
             'question_id': post.question_id,
-            'question_address': post.question_address,
+            'question_hash': post.question_hash.hex() if post.question_hash else None,
+            'contract_address': post.contract_address,
             'bounty': post.bounty,
             'answer_id': post.answer_id,
             'answer_hash': post.answer_hash.hex() if post.answer_hash else None

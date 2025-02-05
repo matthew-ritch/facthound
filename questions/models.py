@@ -33,7 +33,6 @@ class Question(models.Model):
     contractAddress = models.CharField(
         verbose_name="FactHound Contract Address",
         max_length=42,
-        unique=True,
         null=True,
         validators=[
             RegexValidator(regex=r"^0x[a-fA-F0-9]{40}$"),

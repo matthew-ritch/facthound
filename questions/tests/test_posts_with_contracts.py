@@ -100,7 +100,7 @@ class TestQuestions(BaseTestCase):
         self.assertEqual(self.asker_user, post.poster)
         self.assertEqual(question.contractAddress, self.contract_address)
         self.assertEqual(question.questionHash, questionHash)
-        self.assertEqual(question.bounty, 1000000)
+        self.assertEqual(question.bounty, 990000)
         self.assertEqual(question.post, post)
 
         # Verify tags
