@@ -1,7 +1,7 @@
-# FactHound
+# Facthound
 
-**FactHound is a truth-seeking missile.** 
+**Facthound is a truth-seeking missile.** 
 
-**FactHound is information bounties and information markets.**
+**Facthound is information bounties and information markets.**
 
-**FactHound is the only forum that matters.**
+**Facthound is the only forum that matters.**

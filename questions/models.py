@@ -31,7 +31,7 @@ class Question(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     questionHash = models.BinaryField(null=True)
     contractAddress = models.CharField(
-        verbose_name="FactHound Contract Address",
+        verbose_name="Facthound Contract Address",
         max_length=42,
         null=True,
         validators=[
