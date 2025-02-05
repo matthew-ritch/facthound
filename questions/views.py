@@ -51,10 +51,10 @@ w3 = Web3(
         f"{os.getenv('ALCHEMY_API_ENDPOINT')}/{os.getenv('ALCHEMY_API_KEY')}"
     )
 )
-with open("contracts/Question.json", "rb") as f:
-    question_contract = json.load(f)
-question_abi = question_contract["abi"]
-question_bytecode = question_contract["bytecode"]["object"]
+with open("contracts/FactHound.json", "rb") as f:
+    facthound_contract = json.load(f)
+facthound_abi = facthound_contract["abi"]
+facthound_bytecode = facthound_contract["bytecode"]["object"]
 
 
 # endpoints for making posts, threads, q + a
@@ -107,7 +107,9 @@ def question(request):
     topic = request.data.get("topic")
     text = request.data.get("text")
     tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
-    questionAddress = request.data.get("questionAddress")
+    contractAddress = request.data.get("contractAddress")
+    questionHash = request.data.get("questionHash")
+    questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     asker = request.user
     # check if params make sense
     if text is None:
@@ -119,9 +121,9 @@ def question(request):
             },
             status=400,
         )
-    if questionAddress:
+    if contractAddress:
         try:
-            contract = w3.eth.contract(address=questionAddress, abi=question_abi)
+            contract = w3.eth.contract(address=contractAddress, abi=facthound_abi, decode_tuples=True)
         except:
             return JsonResponse(
                 {"message": "Failed to load contract."},
@@ -134,11 +136,11 @@ def question(request):
                 {"message": "Invalid owner."},
                 status=400,
             )
-        questionHash = contract.caller.questionHash()
         expectedQuestionHash = Web3.solidity_keccak(
             ["address", "string"], [asker.wallet, text]
         )
-        asker = contract.caller.asker()
+        questionStruct = contract.caller.getQuestion(questionHash)
+        asker = questionStruct.asker
         if questionHash != expectedQuestionHash:
             return JsonResponse(
                 {"message": "Unexpected questionHash."},
@@ -148,13 +150,13 @@ def question(request):
         bounty = w3.eth.get_balance(contract.address)
         status = (
             "CA"
-            if contract.caller.isCancelled()
+            if questionStruct.status == 4
             else (
                 "RS"
-                if contract.caller.isResolved()
+                if questionStruct.status == 3
                 else (
                     "AS"
-                    if (contract.caller.selectedAnswer().hex() == 32 * "0")
+                    if (questionStruct.status == 1)
                     else "OP"
                 )
             )
@@ -167,7 +169,7 @@ def question(request):
     question = Question.objects.create(
         post=post,
         questionHash=questionHash,
-        questionAddress=questionAddress,
+        contractAddress=contractAddress,
         asker=asker,
         bounty=bounty,
         status=status,
@@ -189,27 +191,28 @@ def answer(request):
     thread = request.data.get("thread")
     text = request.data.get("text")
     question = request.data.get("question")
-    questionAddress = request.data.get("questionAddress")
+    contractAddress = request.data.get("contractAddress")
+    questionHash = request.data.get("questionHash")
+    questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     answerHash = request.data.get("answerHash")
+    answerHash = hexbytes.HexBytes(answerHash) if answerHash else None
     answerer = request.user
-    # check if params make sense
+
+    # Validate basic parameters first
     if text is None:
         return JsonResponse({"message": "Your post needs text."}, status=400)
     if thread is None:
         return JsonResponse({"message": "Your post needs a thread."}, status=400)
     if question is None:
         return JsonResponse({"message": "Your answer needs a question."}, status=400)
-    if (questionAddress is None) ^ (answerHash is None):
-        return JsonResponse(
-            {
-                "message": "If questionAddress or answerHash are provided, then both are required"
-            },
-            status=400,
-        )
+
+    # Get and validate question exists
     try:
         question = Question.objects.get(pk=question)
     except Question.DoesNotExist:
         return JsonResponse({"message": "No question with that id exists."}, status=400)
+
+    # Check thread match
     if question.post.thread.pk != int(thread):
         return JsonResponse(
             {
@@ -217,16 +220,26 @@ def answer(request):
             },
             status=400,
         )
+
+    # Check contract parameters last
+    if any([questionHash is None, answerHash is None, contractAddress is None]) and not (all([questionHash is None, answerHash is None, contractAddress is None])):
+        return JsonResponse(
+            {
+                "message": "If questionHash or answerHash or contractAddress are provided, then all are required"
+            },
+            status=400,
+        )
+
     # from contracts:
-    if questionAddress and answerHash:
+    if questionHash and answerHash and contractAddress:
         # verify that this contract matches the question id
-        if not question.questionAddress == questionAddress:
+        if not question.contractAddress == contractAddress:
             return JsonResponse(
-                {"message": "This question does not match this questionAddress."},
+                {"message": "This question does not match this contractAddress."},
                 status=400,
             )
         try:
-            contract = w3.eth.contract(address=questionAddress, abi=question_abi)
+            contract = w3.eth.contract(address=contractAddress, abi=facthound_abi, decode_tuples=True)
             owner = contract.caller.owner()
         except:
             return JsonResponse(
@@ -249,7 +262,8 @@ def answer(request):
                 status=400,
             )
         # verify that answerHash is an answer for this contract and was posted by this answerer
-        answerer = contract.caller.answerInfoMap(answerHash)
+        questionStruct = contract.caller.getQuestion(questionHash)
+        answerer = contract.caller.getAnswerer(questionHash, answerHash)
         if answerer == ("0x" + 40 * "0"):
             return JsonResponse(
                 {"message": "Invalid answerHash."},
@@ -261,7 +275,7 @@ def answer(request):
                 status=400,
             )
         answerer, _ = User.objects.get_or_create(wallet=answerer)
-        status = "SE" if answerHash == contract.caller.selectedAnswer().hex() else "UN"
+        status = "SE" if answerHash == questionStruct.selectedAnswer.hex() else "UN"
     else:
         status = "OP"
     # make post
@@ -303,14 +317,15 @@ def selection(request):
         return JsonResponse(
             {"message": "This answer does not answer this question."}, status=400
         )
-    if question.questionAddress and answer.answerHash:
+    if question.contractAddress and answer.answerHash:
         # make sure this answer was selected in the contract
-        contract = w3.eth.contract(address=question.questionAddress, abi=question_abi)
-        selectedAnswer = contract.caller.selectedAnswer()
+        contract = w3.eth.contract(address=question.contractAddress, abi=facthound_abi, decode_tuples=True)
+        questionStruct = contract.caller.getQuestion(question.questionHash)
+        selectedAnswer = questionStruct.selectedAnswer
         if selectedAnswer != answer.answerHash:
             return JsonResponse(
                 {
-                    "message": f"This answer must be selected in the contract at address {question.questionAddress}."
+                    "message": f"This answer must be selected in the contract at address {question.contractAddress}."
                 },
                 status=400,
             )
@@ -365,8 +380,8 @@ def payout(request):
         )
         
     # Verify contract state
-    contract = w3.eth.contract(address=question.questionAddress, abi=question_abi)
-    selected_answer = contract.caller.selectedAnswer()
+    contract = w3.eth.contract(address=question.contractAddress, abi=facthound_abi, decode_tuples=True)
+    selected_answer = contract.caller.getQuestion(question.questionHash).selectedAnswer()
     
     if selected_answer != answer.answerHash:
         return JsonResponse(

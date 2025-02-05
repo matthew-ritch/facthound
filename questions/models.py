@@ -30,8 +30,8 @@ class Post(models.Model):
 class Question(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     questionHash = models.BinaryField(null=True)
-    questionAddress = models.CharField(
-        verbose_name="FactHound Question Address",
+    contractAddress = models.CharField(
+        verbose_name="FactHound Contract Address",
         max_length=42,
         unique=True,
         null=True,

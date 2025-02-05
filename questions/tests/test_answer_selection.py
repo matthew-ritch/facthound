@@ -32,8 +32,8 @@ class TestSelectionSansContracts(TestCase):
         self.w3 = Web3(provider)
         views.w3 = self.w3
 
-        with open("contracts/Question.json", "rb") as f:
-            question_contract = json.load(f)
+        with open("contracts/FactHound.json", "rb") as f:
+            facthound_contract = json.load(f)
         #
         self.factory = RequestFactory()
         #
@@ -158,10 +158,11 @@ class TestSelectionWithContracts(TestCase):
         self.w3 = Web3(provider)
         views.w3 = self.w3
 
-        with open("contracts/Question.json", "rb") as f:
-            question_contract = json.load(f)
+        with open("contracts/FactHound.json", "rb") as f:
+            facthound_contract = json.load(f)
         self.factory = RequestFactory()
-        #
+        
+        # Setup accounts
         self.eth_tester = provider.ethereum_tester
         self.owner = self.eth_tester.get_accounts()[0]
         self.oracle = self.eth_tester.get_accounts()[1]
@@ -170,57 +171,60 @@ class TestSelectionWithContracts(TestCase):
         self.asker_user = User.objects.create_user_address(self.asker)
         self.answerer_user = User.objects.create_user_address(self.answerer)
         views.allowed_owners.append(self.owner)
-        #
-        question_dict = {
-            "topic": "sometopic",
-            "text": "I am wondering what to do about this topic.",
-        }
-        # deploy question
-        abi = question_contract["abi"]
-        bytecode = question_contract["bytecode"]["object"]
-        self.questionContract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        questionHash = Web3.solidity_keccak(
-            ["address", "string"], [self.asker, question_dict["text"]]
+
+        # Deploy contract
+        abi = facthound_contract["abi"]
+        bytecode = facthound_contract["bytecode"]["object"]
+        Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
+        tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        self.contract_address = tx_receipt["contractAddress"]
+        self.contract = self.w3.eth.contract(address=self.contract_address, abi=abi, decode_tuples=True)
+
+        # Create question
+        question_text = "I am wondering what to do about this topic."
+        self.question_hash = Web3.solidity_keccak(
+            ["address", "string"], [self.asker, question_text]
         )
-        tx_hash = self.questionContract.constructor(
-            self.owner, self.oracle, self.asker, questionHash
-        ).transact({"from": self.asker, "value": 1})
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
-        self.questionContract = self.w3.eth.contract(
-            address=tx_receipt["contractAddress"], abi=abi
-        )
-        # post question
+        
+        tx_hash = self.contract.functions.createQuestion(
+            self.question_hash
+        ).transact({"from": self.asker, "value": 1000000})
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Create DB entries
         self.thread = Thread.objects.create(
             topic="nothing of import", dt=datetime.datetime.now(pytz.UTC)
         )
         qp = Post.objects.create(
             thread=self.thread,
-            text="Question Text",
+            text=question_text,
             dt=datetime.datetime.now(tz=pytz.UTC),
             poster=self.asker_user,
         )
         self.question = Question.objects.create(
-            questionHash=questionHash,
-            questionAddress=tx_receipt["contractAddress"],
+            questionHash=self.question_hash,
+            contractAddress=self.contract_address,
             post=qp,
             asker=self.asker_user,
+            bounty=1000000,
             status="OP",
         )
-        # put answer in contract
-        answer_dict = {
-            "text": "You should do everything.",
-        }
+
+        # Create answer
+        answer_text = "You should do everything."
         self.answer_hash = Web3.solidity_keccak(
-            ["address", "string"], [self.answerer, answer_dict["text"]]
+            ["address", "string"], [self.answerer, answer_text]
         )
-        tx_hash = self.questionContract.functions.createAnswer(
+        tx_hash = self.contract.functions.createAnswer(
+            self.question_hash,
             self.answer_hash
         ).transact({"from": self.answerer})
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
-        # post answer
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
         ap = Post.objects.create(
             thread=self.thread,
-            text=answer_dict["text"],
+            text=answer_text,
             dt=datetime.datetime.now(tz=pytz.UTC),
             poster=self.answerer_user,
         )
@@ -229,24 +233,24 @@ class TestSelectionWithContracts(TestCase):
             question=self.question,
             post=ap,
             answerer=self.answerer_user,
-            status="OP",
+            status="UN",
         )
 
     def test_select_answer(self):
-        # select answer in contract
-        tx_hash = self.questionContract.functions.selectAnswer(
+        # Select answer in contract
+        tx_hash = self.contract.functions.selectAnswer(
+            self.question_hash,
             self.answer_hash
         ).transact({"from": self.asker})
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, 180)
-        # select in backend
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Select in backend
         selection_dict = {"question": self.question.pk, "answer": self.answer.pk}
-        request = self.factory.post(
-            "/api/selection/",
-            selection_dict,
-        )
+        request = self.factory.post("/api/selection/", selection_dict)
         force_authenticate(request, self.asker_user)
         response = views.selection(request)
         content = json.loads(response.content)
+        
         question = Question.objects.get(pk=content["question"])
         answer = Answer.objects.get(pk=content["answer"])
         self.assertEqual(response.status_code, 200)
@@ -256,15 +260,33 @@ class TestSelectionWithContracts(TestCase):
 
     def test_not_in_contract(self):
         selection_dict = {"question": self.question.pk, "answer": self.answer.pk}
-        request = self.factory.post(
-            "/api/selection/",
-            selection_dict,
-        )
+        request = self.factory.post("/api/selection/", selection_dict)
         force_authenticate(request, self.asker_user)
         response = views.selection(request)
         content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             content["message"],
-            f"This answer must be selected in the contract at address {self.question.questionAddress}.",
+            f"This answer must be selected in the contract at address {self.question.contractAddress}."
         )
+
+    def test_oracle_can_select(self):
+        # Oracle selects answer in contract
+        tx_hash = self.contract.functions.selectAnswer(
+            self.question_hash,
+            self.answer_hash
+        ).transact({"from": self.oracle})
+        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+
+        # Oracle selects in backend
+        oracle_user = User.objects.create_user_address(self.oracle)
+        selection_dict = {"question": self.question.pk, "answer": self.answer.pk}
+        request = self.factory.post("/api/selection/", selection_dict)
+        force_authenticate(request, oracle_user)
+        response = views.selection(request)
+        
+        self.assertEqual(response.status_code, 200)
+        question = Question.objects.get(pk=self.question.pk)
+        answer = Answer.objects.get(pk=self.answer.pk)
+        self.assertEqual(question.status, "AS")
+        self.assertEqual(answer.status, "SE")
