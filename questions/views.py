@@ -82,6 +82,15 @@ def post(request):
     text = request.data.get("text")
     tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
 
+    logger.info(json.dumps({
+        "view": "post",
+        "wallet": request.user.wallet,
+        "username": request.user.username,
+        "thread": thread,
+        "topic": topic,
+        "tags": tags
+    }))
+
     # check if params make sense
     if text is None:
         return JsonResponse({"message": "Your post needs text."}, status=400)
@@ -109,6 +118,18 @@ def question(request):
     tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
     contractAddress = request.data.get("contractAddress")
     questionHash = request.data.get("questionHash")
+
+    logger.info(json.dumps({
+        "view": "question",
+        "wallet": request.user.wallet,
+        "username": request.user.username,
+        "thread": thread,
+        "topic": topic,
+        "tags": tags,
+        "contractAddress": contractAddress,
+        "questionHash": questionHash
+    }))
+
     questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     asker = request.user
     # check if params make sense
@@ -193,8 +214,20 @@ def answer(request):
     question = request.data.get("question")
     contractAddress = request.data.get("contractAddress")
     questionHash = request.data.get("questionHash")
-    questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     answerHash = request.data.get("answerHash")
+
+    logger.info(json.dumps({
+        "view": "answer",
+        "wallet": request.user.wallet,
+        "username": request.user.username,
+        "thread": thread,
+        "question": question,
+        "contractAddress": contractAddress,
+        "questionHash": questionHash,
+        "answerHash": answerHash
+    }))
+
+    questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     answerHash = hexbytes.HexBytes(answerHash) if answerHash else None
     answerer = request.user
 
@@ -305,6 +338,15 @@ def answer(request):
 def selection(request):
     question = request.data.get("question")
     answer = request.data.get("answer")
+
+    logger.info(json.dumps({
+        "view": "selection",
+        "wallet": request.user.wallet,
+        "username": request.user.username,
+        "question": question,
+        "answer": answer
+    }))
+
     try:
         question = Question.objects.get(pk=question)
     except Question.DoesNotExist:
@@ -359,6 +401,14 @@ def selection(request):
 def payout(request):
     question = request.data.get("question")
     answer = request.data.get("answer")
+
+    logger.info(json.dumps({
+        "view": "payout",
+        "wallet": request.user.wallet,
+        "username": request.user.username,
+        "question": question,
+        "answer": answer
+    }))
     
     try:
         question = Question.objects.get(pk=question)
@@ -450,6 +500,12 @@ def annotate_threads(queryset):
 # Update the view functions to handle the new return type
 @api_view(["GET"])
 def threadList(request):
+    logger.info(json.dumps({
+        "view": "threadList",
+        "wallet": request.user.wallet if request.user.is_authenticated else None,
+        "username": request.user.username if request.user.is_authenticated else None,
+    }))
+    
     queryset = Thread.objects.all().order_by("-dt")
     threads = annotate_threads(queryset)
     return JsonResponse({"threads": threads})
@@ -457,6 +513,14 @@ def threadList(request):
 @api_view(["GET"])
 def search(request):
     search_string = request.GET.get("search_string")
+    
+    logger.info(json.dumps({
+        "view": "search",
+        "wallet": request.user.wallet if request.user.is_authenticated else None,
+        "username": request.user.username if request.user.is_authenticated else None,
+        "search_string": search_string
+    }))
+
     components = search_string.split()
     posts = Post.objects.filter(
         reduce(operator.or_, (Q(text__icontains=x)  for x in components))
@@ -474,6 +538,15 @@ def search(request):
 
 @api_view(["GET"])
 def threadPosts(request):
+    threadId = request.query_params.get("threadId")
+
+    logger.info(json.dumps({
+        "view": "threadPosts",
+        "wallet": request.user.wallet if request.user.is_authenticated else None,
+        "username": request.user.username if request.user.is_authenticated else None,
+        "threadId": threadId
+    }))
+
     response_dict = {}
     queryset = Post.objects.all()
     threadId = request.query_params.get("threadId")
