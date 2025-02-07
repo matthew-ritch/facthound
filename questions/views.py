@@ -553,7 +553,9 @@ def threadPosts(request):
     if threadId is not None:
         queryset = queryset.filter(thread__pk=threadId)
         response_dict["threadId"] = threadId
-        response_dict["threadTopic"] = queryset.first().thread.topic
+    if queryset.count() == 0:
+        return JsonResponse({"message": "Thread does not exist"}, status=404)
+    response_dict["threadTopic"] = queryset.first().thread.topic
     queryset = queryset.order_by("dt")
     queryset = queryset.annotate(poster_name=F("poster__username"))
     queryset = queryset.annotate(poster_wallet=F("poster__wallet"))
