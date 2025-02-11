@@ -29,7 +29,7 @@ if os.getenv("PROD") == "True":
     DEBUG = False
     SECURE_SSL_REDIRECT = True
     CRSF_TRUSTED_ORIGINS = ["https://facthound.xyz"]
-    SIWE_CHAIN_ID=84532
+    SIWE_CHAIN_ID=8453
     SIWE_DOMAIN="facthound.xyz"
     SIWE_URI="https://facthound.xyz"
 

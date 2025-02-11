@@ -4,7 +4,7 @@ from django.conf import settings
 SIWE_MESSAGE_VALIDITY = getattr(settings, 'SIWE_MESSAGE_VALIDITY', 60*24)
 
 # Expected chain ID for SIWE messages
-SIWE_CHAIN_ID = getattr(settings, 'SIWE_CHAIN_ID', 84532)
+SIWE_CHAIN_ID = getattr(settings, 'SIWE_CHAIN_ID', 8453)
 
 # Expected domain for SIWE messages
 SIWE_DOMAIN = getattr(settings, 'SIWE_DOMAIN', 'localhost:3000')

@@ -10,6 +10,7 @@ import datetime
 from siweauth.models import Nonce, User
 from siweauth.views import get_nonce, TokenObtainPairView, SIWETokenObtainPairView, who_am_i
 from siweauth.auth import check_for_siwe, _nonce_is_valid
+from siweauth.settings import SIWE_CHAIN_ID
 
 
 def make_message(address, nonce):
@@ -20,7 +21,7 @@ To make posts.
 
 URI: http://localhost:3000
 Version: 1
-Chain ID: 84532
+Chain ID: {SIWE_CHAIN_ID}
 Nonce: {nonce}
 Issued At: {datetime.datetime.now()}
         """
@@ -344,7 +345,7 @@ To make posts.
 
 URI: http://localhost:3000
 Version: 1
-Chain ID: 84532
+Chain ID: {SIWE_CHAIN_ID}
 Nonce: {self.nonce}
 Issued At: {old_time}
         """
@@ -397,7 +398,7 @@ To make posts.
 
 URI: https://malicious-site.com/api/token/
 Version: 1
-Chain ID: 84532
+Chain ID: {SIWE_CHAIN_ID}
 Nonce: {self.nonce}
 Issued At: {datetime.datetime.now()}
         """
