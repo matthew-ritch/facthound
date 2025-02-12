@@ -50,9 +50,10 @@ class Question(models.Model):
         ],
         max_length=100,
     )
+    confirmed_onchain = models.BooleanField(null=True)
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.asker}'s question {list(self.post.thread.post_set.filter(question__isnull = False).order_by('dt')).index(self.post)}"
+        return f"{self.post.thread.topic}: {self.asker}'s question {self.id}"
 
 
 class Answer(models.Model):
@@ -69,9 +70,11 @@ class Answer(models.Model):
         ],
         max_length=100,
     )
+    confirmed_onchain = models.BooleanField(null=True)
+    selection_confirmed_onchain = models.BooleanField(null=True)
 
     def __str__(self):
-        return f"{self.post.thread.topic}: {self.answerer}'s answer {list(self.post.thread.post_set.filter(answer__isnull = False).order_by('dt')).index(self.post)}"
+        return f"{self.post.thread.topic}: {self.answerer}'s answer {self.id}"
 
 
 class Tag(models.Model):
