@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.test import RequestFactory
 
 from web3 import Web3
-import json, datetime, pytz
+import json, datetime, pytz, logging
 
 from siweauth.views import TokenObtainPairView
 from siweauth.models import User
@@ -16,6 +16,8 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
+
+logging.disable(logging.CRITICAL)
 
 
 class TestPosts(TestCase):

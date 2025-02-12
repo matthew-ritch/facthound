@@ -7,7 +7,7 @@ from web3 import (
     EthereumTesterProvider,
     Web3,
 )
-import json, datetime, pytz
+import json, datetime, pytz, logging
 
 from siweauth.models import User
 
@@ -20,6 +20,9 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
+from questions import confirm_onchain
+
+logging.disable(logging.CRITICAL)
 
 
 class BaseTestCase(TestCase):
@@ -28,6 +31,7 @@ class BaseTestCase(TestCase):
         self.provider = EthereumTesterProvider()
         self.w3 = Web3(self.provider)
         views.w3 = self.w3
+        confirm_onchain.w3 = self.w3
 
         with open("contracts/FactHound.json", "rb") as f:
             self.facthound_contract = json.load(f)
@@ -47,7 +51,7 @@ class TestQuestions(BaseTestCase):
         self.oracle = self.eth_tester.get_accounts()[1]
         self.asker = self.eth_tester.get_accounts()[2]
         self.asker_user = User.objects.create_user_address(self.asker)
-        views.allowed_owners.append(self.owner)
+        confirm_onchain.allowed_owners.append(self.owner)
 
         # Deploy contract
         abi = self.facthound_contract["abi"]
@@ -89,6 +93,18 @@ class TestQuestions(BaseTestCase):
         # Verify response
         self.assertEqual(response.status_code, 200)
         content = json.loads(response.content)
+
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "confirmType": "question"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        self.assertEqual(response.status_code, 200)
 
         # Verify database objects
         thread = Thread.objects.get(topic=question_dict["topic"])
@@ -157,7 +173,20 @@ class TestQuestions(BaseTestCase):
         force_authenticate(request, self.asker_user)
         response = views.question(request)
         content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "confirmType": "question"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
+
         self.assertEqual(content["message"], "Failed to load contract.")
 
     def test_question_invalid_owner(self):
@@ -188,16 +217,29 @@ class TestQuestions(BaseTestCase):
         force_authenticate(request, self.asker_user)
         response = views.question(request)
         content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "confirmType": "question"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
+
         self.assertEqual(content["message"], "Invalid owner.")
 
     def test_question_unexpected_questionHash(self):
         question_dict = {
-            "topic": "sometopic", 
+            "topic": "sometopic",
             "text": "I am wondering what to do about this topic.",
             "tags": ["a", "b", "c"],
         }
-        
+
         # Deploy contract with oracle
         abi = self.facthound_contract["abi"]
         bytecode = self.facthound_contract["bytecode"]["object"]
@@ -209,7 +251,7 @@ class TestQuestions(BaseTestCase):
         questionHash = Web3.solidity_keccak(
             ["address", "string"], [self.oracle, question_dict["text"]]
         )
-        
+
         contract_address = tx_receipt["contractAddress"]
         tx_hash = self.contract.functions.createQuestion(questionHash).transact(
             {"from": self.oracle, "value": 1}
@@ -220,13 +262,25 @@ class TestQuestions(BaseTestCase):
         question_dict["text"] = question_dict["text"] + "HA!"
         question_dict["contractAddress"] = contract_address
         question_dict["questionHash"] = questionHash.hex()
-        
+
         request = self.factory.post(
             "/api/question/",
             question_dict,
         )
         force_authenticate(request, self.asker_user)
         response = views.question(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "confirmType": "question"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
         content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(content["message"], "Unexpected questionHash.")
@@ -245,7 +299,7 @@ class TestAnswers(BaseTestCase):
         self.asker_user = User.objects.create_user_address(self.asker)
         self.answerer = self.eth_tester.get_accounts()[3]
         self.answerer_user = User.objects.create_user_address(self.answerer)
-        views.allowed_owners.append(self.owner)
+        confirm_onchain.allowed_owners.append(self.owner)
 
         # Deploy contract
         abi = self.facthound_contract["abi"]
@@ -313,6 +367,19 @@ class TestAnswers(BaseTestCase):
         force_authenticate(request, self.answerer_user)
         response = views.answer(request)
         content = json.loads(response.content)
+
+        # Confirm onchain
+        confirm_dict = {
+            "answer": content["answer"],
+            "confirmType": "answer"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.answerer_user)
+        response = views.confirm(request)
+        self.assertEqual(response.status_code, 200)
+
         # make sure post was created
         post = Post.objects.get(text=post_dict["text"], thread=post_dict["thread"])
         postpk = Post.objects.get(pk=content["post"])
@@ -378,6 +445,18 @@ class TestAnswers(BaseTestCase):
         )
         force_authenticate(request, self.answerer_user)
         response = views.answer(request)
+        content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "confirmType": "question"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
         content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -453,10 +532,22 @@ class TestAnswers(BaseTestCase):
         force_authenticate(request, self.answerer_user)
         response = views.answer(request)
         content = json.loads(response.content)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "answer": content["answer"],
+            "confirmType": "answer"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        content = json.loads(response.content)
         self.assertEqual(
             content["message"],
-            "Unexpected answerHash.",
+            "Unexpected answerHash",
         )
 
     def test_wrong_answerHash_fails(self):
@@ -487,8 +578,20 @@ class TestAnswers(BaseTestCase):
         force_authenticate(request, self.answerer_user)
         response = views.answer(request)
         content = json.loads(response.content)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        # Confirm onchain
+        confirm_dict = {
+            "question": content["question"],
+            "answer": content["answer"],
+            "confirmType": "answer"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        content = json.loads(response.content)
         self.assertEqual(
             content["message"],
-            "Invalid answerHash.",
+            "Invalid answerHash",
         )

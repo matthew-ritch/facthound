@@ -7,7 +7,7 @@ from web3 import (
     EthereumTesterProvider,
     Web3,
 )
-import json, datetime, pytz
+import json, datetime, pytz, logging
 
 from siweauth.models import User
 
@@ -20,9 +20,9 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
+from questions import confirm_onchain
 
-
-# guide: https://web3py.readthedocs.io/en/v5/examples.html#contract-unit-tests-in-python
+logging.disable(logging.CRITICAL)
 
 
 class TestSelectionSansContracts(TestCase):
@@ -31,6 +31,7 @@ class TestSelectionSansContracts(TestCase):
         provider = EthereumTesterProvider()
         self.w3 = Web3(provider)
         views.w3 = self.w3
+        confirm_onchain.w3 = self.w3
 
         with open("contracts/FactHound.json", "rb") as f:
             facthound_contract = json.load(f)
@@ -44,7 +45,7 @@ class TestSelectionSansContracts(TestCase):
         self.answerer = self.eth_tester.get_accounts()[3]
         self.asker_user = User.objects.create_user_address(self.asker)
         self.answerer_user = User.objects.create_user_address(self.answerer)
-        views.allowed_owners.append(self.owner)
+        confirm_onchain.allowed_owners.append(self.owner)
         #
         self.thread = Thread.objects.create(
             topic="nothing of import", dt=datetime.datetime.now(pytz.UTC)
@@ -82,9 +83,9 @@ class TestSelectionSansContracts(TestCase):
         force_authenticate(request, self.asker_user)
         response = views.selection(request)
         content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
         question = Question.objects.get(pk=content["question"])
         answer = Answer.objects.get(pk=content["answer"])
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(question.status, "AS")
         self.assertEqual(answer.status, "SE")
         self.assertEqual(question.answer_set.filter(status="SE").first(), answer)
@@ -157,11 +158,12 @@ class TestSelectionWithContracts(TestCase):
         provider = EthereumTesterProvider()
         self.w3 = Web3(provider)
         views.w3 = self.w3
+        confirm_onchain.w3 = self.w3
 
         with open("contracts/FactHound.json", "rb") as f:
             facthound_contract = json.load(f)
         self.factory = RequestFactory()
-        
+
         # Setup accounts
         self.eth_tester = provider.ethereum_tester
         self.owner = self.eth_tester.get_accounts()[0]
@@ -170,7 +172,7 @@ class TestSelectionWithContracts(TestCase):
         self.answerer = self.eth_tester.get_accounts()[3]
         self.asker_user = User.objects.create_user_address(self.asker)
         self.answerer_user = User.objects.create_user_address(self.answerer)
-        views.allowed_owners.append(self.owner)
+        confirm_onchain.allowed_owners.append(self.owner)
 
         # Deploy contract
         abi = facthound_contract["abi"]
@@ -179,17 +181,19 @@ class TestSelectionWithContracts(TestCase):
         tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         self.contract_address = tx_receipt["contractAddress"]
-        self.contract = self.w3.eth.contract(address=self.contract_address, abi=abi, decode_tuples=True)
+        self.contract = self.w3.eth.contract(
+            address=self.contract_address, abi=abi, decode_tuples=True
+        )
 
         # Create question
         question_text = "I am wondering what to do about this topic."
         self.question_hash = Web3.solidity_keccak(
             ["address", "string"], [self.asker, question_text]
         )
-        
-        tx_hash = self.contract.functions.createQuestion(
-            self.question_hash
-        ).transact({"from": self.asker, "value": 1000000})
+
+        tx_hash = self.contract.functions.createQuestion(self.question_hash).transact(
+            {"from": self.asker, "value": 1000000}
+        )
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
         # Create DB entries
@@ -217,8 +221,7 @@ class TestSelectionWithContracts(TestCase):
             ["address", "string"], [self.answerer, answer_text]
         )
         tx_hash = self.contract.functions.createAnswer(
-            self.question_hash,
-            self.answer_hash
+            self.question_hash, self.answer_hash
         ).transact({"from": self.answerer})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
@@ -239,8 +242,7 @@ class TestSelectionWithContracts(TestCase):
     def test_select_answer(self):
         # Select answer in contract
         tx_hash = self.contract.functions.selectAnswer(
-            self.question_hash,
-            self.answer_hash
+            self.question_hash, self.answer_hash
         ).transact({"from": self.asker})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
@@ -250,10 +252,21 @@ class TestSelectionWithContracts(TestCase):
         force_authenticate(request, self.asker_user)
         response = views.selection(request)
         content = json.loads(response.content)
-        
+
+        # Add confirmation step
+        confirm_dict = {
+            "answer": content["answer"],
+            "confirmType": "selection"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        self.assertEqual(response.status_code, 200)
+
         question = Question.objects.get(pk=content["question"])
         answer = Answer.objects.get(pk=content["answer"])
-        self.assertEqual(response.status_code, 200)
         self.assertEqual(question.status, "AS")
         self.assertEqual(answer.status, "SE")
         self.assertEqual(question.answer_set.filter(status="SE").first(), answer)
@@ -264,17 +277,29 @@ class TestSelectionWithContracts(TestCase):
         force_authenticate(request, self.asker_user)
         response = views.selection(request)
         content = json.loads(response.content)
+        self.assertEqual(response.status_code, 200)
+        # Add confirmation step
+        confirm_dict = {
+            "question": content["question"],
+            "answer": content["answer"],
+            "confirmType": "selection"
+        }
+        request = self.factory.post(
+            "/api/confirm/", data=confirm_dict, content_type="application/json"
+        )
+        force_authenticate(request, self.asker_user)
+        response = views.confirm(request)
+        content = json.loads(response.content)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             content["message"],
-            f"This answer must be selected in the contract at address {self.question.contractAddress}."
+            f"This answer must be selected in the contract at address {self.question.contractAddress}.",
         )
 
     def test_oracle_can_select(self):
         # Oracle selects answer in contract
         tx_hash = self.contract.functions.selectAnswer(
-            self.question_hash,
-            self.answer_hash
+            self.question_hash, self.answer_hash
         ).transact({"from": self.oracle})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
@@ -284,7 +309,7 @@ class TestSelectionWithContracts(TestCase):
         request = self.factory.post("/api/selection/", selection_dict)
         force_authenticate(request, oracle_user)
         response = views.selection(request)
-        
+
         self.assertEqual(response.status_code, 200)
         question = Question.objects.get(pk=self.question.pk)
         answer = Answer.objects.get(pk=self.answer.pk)

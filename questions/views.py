@@ -1,9 +1,7 @@
 from django.http import JsonResponse
 from django.db.models import (
-    Count,
     Case,
     When,
-    IntegerField,
     Q,
     F,
     Sum,
@@ -35,7 +33,11 @@ from questions.serializers import (
     AnswerSerializer,
     TagSerializer,
 )
-from questions.settings import allowed_owners
+from questions.confirm_onchain import (
+    confirm_question,
+    confirm_answer,
+    confirm_selection,
+)
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -80,16 +82,24 @@ def post(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
+    tags = (
+        request.data.getlist("tags")
+        if hasattr(request.data, "getlist")
+        else request.data.get("tags", [])
+    )
 
-    logger.info(json.dumps({
-        "view": "post",
-        "wallet": request.user.wallet,
-        "username": request.user.username,
-        "thread": thread,
-        "topic": topic,
-        "tags": tags
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "view": "post",
+                "wallet": request.user.wallet,
+                "username": request.user.username,
+                "thread": thread,
+                "topic": topic,
+                "tags": tags,
+            }
+        )
+    )
 
     # check if params make sense
     if text is None:
@@ -103,7 +113,7 @@ def post(request):
         )
     # make post
     post = _make_post(request.user, text, thread, topic, tags)
-    
+
     return JsonResponse(
         {"message": "success", "thread": post.thread.pk, "post": post.pk}
     )
@@ -115,20 +125,28 @@ def question(request):
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
-    tags = request.data.getlist("tags") if hasattr(request.data, 'getlist') else request.data.get("tags", [])
+    tags = (
+        request.data.getlist("tags")
+        if hasattr(request.data, "getlist")
+        else request.data.get("tags", [])
+    )
     contractAddress = request.data.get("contractAddress")
     questionHash = request.data.get("questionHash")
 
-    logger.info(json.dumps({
-        "view": "question",
-        "wallet": request.user.wallet,
-        "username": request.user.username,
-        "thread": thread,
-        "topic": topic,
-        "tags": tags,
-        "contractAddress": contractAddress,
-        "questionHash": questionHash
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "view": "question",
+                "wallet": request.user.wallet,
+                "username": request.user.username,
+                "thread": thread,
+                "topic": topic,
+                "tags": tags,
+                "contractAddress": contractAddress,
+                "questionHash": questionHash,
+            }
+        )
+    )
 
     questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     asker = request.user
@@ -143,47 +161,11 @@ def question(request):
             status=400,
         )
     if contractAddress:
-        try:
-            contract = w3.eth.contract(address=contractAddress, abi=facthound_abi, decode_tuples=True)
-        except:
-            return JsonResponse(
-                {"message": "Failed to load contract."},
-                status=400,
-            )
-        # verify that we own this contract
-        owner = contract.caller.owner()
-        if not owner in allowed_owners:
-            return JsonResponse(
-                {"message": "Invalid owner."},
-                status=400,
-            )
-        expectedQuestionHash = Web3.solidity_keccak(
-            ["address", "string"], [asker.wallet, text]
-        )
-        questionStruct = contract.caller.getQuestion(questionHash)
-        asker = questionStruct.asker
-        if questionHash != expectedQuestionHash:
-            return JsonResponse(
-                {"message": "Unexpected questionHash."},
-                status=400,
-            )
-        asker, _ = User.objects.get_or_create(wallet=asker)
-        bounty = questionStruct.bounty
-        status = (
-            "CA"
-            if questionStruct.status == 4
-            else (
-                "RS"
-                if questionStruct.status == 3
-                else (
-                    "AS"
-                    if (questionStruct.status == 1)
-                    else "OP"
-                )
-            )
-        )
+        confirmed_onchain = False
+        status = "OP"
+        bounty = None
     else:
-        questionHash, bounty, status = None, None, "OP"
+        questionHash, bounty, confirmed_onchain, status = None, None, None, "OP"
     # make post
     post = _make_post(request.user, text, thread, topic, tags)
     # make question
@@ -194,8 +176,9 @@ def question(request):
         asker=asker,
         bounty=bounty,
         status=status,
+        confirmed_onchain=confirmed_onchain,
     )
-    
+
     return JsonResponse(
         {
             "message": "success",
@@ -216,16 +199,20 @@ def answer(request):
     questionHash = request.data.get("questionHash")
     answerHash = request.data.get("answerHash")
 
-    logger.info(json.dumps({
-        "view": "answer",
-        "wallet": request.user.wallet,
-        "username": request.user.username,
-        "thread": thread,
-        "question": question,
-        "contractAddress": contractAddress,
-        "questionHash": questionHash,
-        "answerHash": answerHash
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "view": "answer",
+                "wallet": request.user.wallet,
+                "username": request.user.username,
+                "thread": thread,
+                "question": question,
+                "contractAddress": contractAddress,
+                "questionHash": questionHash,
+                "answerHash": answerHash,
+            }
+        )
+    )
 
     questionHash = hexbytes.HexBytes(questionHash) if questionHash else None
     answerHash = hexbytes.HexBytes(answerHash) if answerHash else None
@@ -255,7 +242,11 @@ def answer(request):
         )
 
     # Check contract parameters last
-    if any([questionHash is None, answerHash is None, contractAddress is None]) and not (all([questionHash is None, answerHash is None, contractAddress is None])):
+    if any(
+        [questionHash is None, answerHash is None, contractAddress is None]
+    ) and not (
+        all([questionHash is None, answerHash is None, contractAddress is None])
+    ):
         return JsonResponse(
             {
                 "message": "If questionHash or answerHash or contractAddress are provided, then all are required"
@@ -265,52 +256,16 @@ def answer(request):
 
     # from contracts:
     if questionHash and answerHash and contractAddress:
-        # verify that this contract matches the question id
-        if not question.contractAddress == contractAddress:
+        if question.contractAddress != contractAddress:
             return JsonResponse(
                 {"message": "This question does not match this contractAddress."},
                 status=400,
             )
-        try:
-            contract = w3.eth.contract(address=contractAddress, abi=facthound_abi, decode_tuples=True)
-            owner = contract.caller.owner()
-        except:
-            return JsonResponse(
-                {"message": "Failed to load contract."},
-                status=400,
-            )
-        # verify that we own this contract
-        if not owner in allowed_owners:
-            return JsonResponse(
-                {"message": "Invalid owner."},
-                status=400,
-            )
-        expectedAnswerHash = Web3.solidity_keccak(
-            ["address", "string"], [answerer.wallet, text]
-        )
-        answerHash = hexbytes.HexBytes(answerHash)
-        if answerHash != expectedAnswerHash:
-            return JsonResponse(
-                {"message": "Unexpected answerHash."},
-                status=400,
-            )
-        # verify that answerHash is an answer for this contract and was posted by this answerer
-        questionStruct = contract.caller.getQuestion(questionHash)
-        answerer = contract.caller.getAnswererAddress(questionHash, answerHash)
-        if answerer == ("0x" + 40 * "0"):
-            return JsonResponse(
-                {"message": "Invalid answerHash."},
-                status=400,
-            )
-        if answerer != request.user.wallet:
-            return JsonResponse(
-                {"message": "Invalid answerer."},
-                status=400,
-            )
-        answerer, _ = User.objects.get_or_create(wallet=answerer)
-        status = "SE" if answerHash == questionStruct.selectedAnswer.hex() else "UN"
+        status = "OP"
+        confirmed_onchain = False
     else:
         status = "OP"
+        confirmed_onchain = None
     # make post
     post = _make_post(request.user, text, thread, None, None)
     # make answer
@@ -320,8 +275,9 @@ def answer(request):
         answerHash=answerHash,
         answerer=answerer,
         status=status,
+        confirmed_onchain=confirmed_onchain,
     )
-    
+
     return JsonResponse(
         {
             "message": "success",
@@ -339,13 +295,17 @@ def selection(request):
     question = request.data.get("question")
     answer = request.data.get("answer")
 
-    logger.info(json.dumps({
-        "view": "selection",
-        "wallet": request.user.wallet,
-        "username": request.user.username,
-        "question": question,
-        "answer": answer
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "view": "selection",
+                "wallet": request.user.wallet,
+                "username": request.user.username,
+                "question": question,
+                "answer": answer,
+            }
+        )
+    )
 
     try:
         question = Question.objects.get(pk=question)
@@ -360,17 +320,7 @@ def selection(request):
             {"message": "This answer does not answer this question."}, status=400
         )
     if question.contractAddress and answer.answerHash:
-        # make sure this answer was selected in the contract
-        contract = w3.eth.contract(address=question.contractAddress, abi=facthound_abi, decode_tuples=True)
-        questionStruct = contract.caller.getQuestion(question.questionHash)
-        selectedAnswer = questionStruct.selectedAnswer
-        if selectedAnswer != answer.answerHash:
-            return JsonResponse(
-                {
-                    "message": f"This answer must be selected in the contract at address {question.contractAddress}."
-                },
-                status=400,
-            )
+        answer.selection_confirmed_onchain = False
     else:
         if question.asker != request.user:
             return JsonResponse(
@@ -378,14 +328,13 @@ def selection(request):
                 status=400,
             )
     # Set all other answers to unselected
-    Answer.objects.filter(question=question).exclude(pk=answer.pk).update(status='UN')
+    Answer.objects.filter(question=question).exclude(pk=answer.pk).update(status="UN")
     # Set selected answer and question status
     answer.status = "SE"
     question.status = "AS"
 
     answer.save()
     question.save()
-    
 
     return JsonResponse(
         {
@@ -402,14 +351,18 @@ def payout(request):
     question = request.data.get("question")
     answer = request.data.get("answer")
 
-    logger.info(json.dumps({
-        "view": "payout",
-        "wallet": request.user.wallet,
-        "username": request.user.username,
-        "question": question,
-        "answer": answer
-    }))
-    
+    logger.info(
+        json.dumps(
+            {
+                "view": "payout",
+                "wallet": request.user.wallet,
+                "username": request.user.username,
+                "question": question,
+                "answer": answer,
+            }
+        )
+    )
+
     try:
         question = Question.objects.get(pk=question)
     except Question.DoesNotExist:
@@ -418,39 +371,63 @@ def payout(request):
         answer = Answer.objects.get(pk=answer)
     except Answer.DoesNotExist:
         return JsonResponse({"message": "No answer with that id exists."}, status=400)
-        
+
     if answer.question != question:
         return JsonResponse(
             {"message": "This answer does not answer this question."}, status=400
         )
-        
+
     if not question.contractAddress or not answer.answerHash:
         return JsonResponse(
             {"message": "This is not an on-chain question/answer pair."}, status=400
         )
-        
+
     # Verify contract state
-    contract = w3.eth.contract(address=question.contractAddress, abi=facthound_abi, decode_tuples=True)
-    selected_answer = contract.caller.getQuestion(question.questionHash).selectedAnswer()
-    
+    contract = w3.eth.contract(
+        address=question.contractAddress, abi=facthound_abi, decode_tuples=True
+    )
+    selected_answer = contract.caller.getQuestion(
+        question.questionHash
+    ).selectedAnswer()
+
     if selected_answer != answer.answerHash:
         return JsonResponse(
             {"message": "This answer is not selected in the contract."}, status=400
         )
-    
+
     # Update statuses
     question.status = "RS"  # Resolved
-    answer.status = "PO"    # Paid out
-    
+    answer.status = "PO"  # Paid out
+
     question.save()
     answer.save()
-    
-    return JsonResponse({
-        "message": "payout processed",
-        "question": question.pk,
-        "answer": answer.pk,
-    })
 
+    return JsonResponse(
+        {
+            "message": "payout processed",
+            "question": question.pk,
+            "answer": answer.pk,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def confirm(request):
+    question = request.data.get("question")
+    answer = request.data.get("answer")
+    type = request.data.get("confirmType")
+    match type:
+        case "question":
+            success, message = confirm_question(question)
+        case "answer":
+            success, message = confirm_answer(answer)
+        case "selection":
+            success, message = confirm_selection(answer)
+    return JsonResponse(
+            {"message": message}, status=200 if success else 400
+        )
+    
 
 def annotate_threads(queryset):
     queryset = queryset.annotate(
@@ -474,62 +451,84 @@ def annotate_threads(queryset):
         total_bounty_claimed=Sum(
             Subquery(
                 Question.objects.filter(
-                    post__thread=OuterRef("pk"), bounty__isnull=False, status__in=["AS", "RS"]
+                    post__thread=OuterRef("pk"),
+                    bounty__isnull=False,
+                    status__in=["AS", "RS"],
                 ).values("bounty")
             )
         ),
     )
-    
+
     # Manually add tags for each thread
     threads_with_annotations = []
     for thread in queryset:
         thread_dict = {
-            'id': thread.id,
-            'topic': thread.topic,
-            'dt': thread.dt,
-            'first_poster_wallet': thread.first_poster_wallet,
-            'first_poster_name': thread.first_poster_name,
-            'total_bounty_available': thread.total_bounty_available,
-            'total_bounty_claimed': thread.total_bounty_claimed,
-            'tags': list(thread.tag_set.values_list('name', flat=True))
+            "id": thread.id,
+            "topic": thread.topic,
+            "dt": thread.dt,
+            "first_poster_wallet": thread.first_poster_wallet,
+            "first_poster_name": thread.first_poster_name,
+            "total_bounty_available": thread.total_bounty_available,
+            "total_bounty_claimed": thread.total_bounty_claimed,
+            "tags": list(thread.tag_set.values_list("name", flat=True)),
         }
         threads_with_annotations.append(thread_dict)
-    
+
     return threads_with_annotations
+
 
 # Update the view functions to handle the new return type
 @api_view(["GET"])
 def threadList(request):
-    logger.info(json.dumps({
-        "view": "threadList",
-        "wallet": request.user.wallet if request.user.is_authenticated else None,
-        "username": request.user.username if request.user.is_authenticated else None,
-    }))
-    
+    logger.info(
+        json.dumps(
+            {
+                "view": "threadList",
+                "wallet": (
+                    request.user.wallet if request.user.is_authenticated else None
+                ),
+                "username": (
+                    request.user.username if request.user.is_authenticated else None
+                ),
+            }
+        )
+    )
+
     queryset = Thread.objects.all().order_by("-dt")
     threads = annotate_threads(queryset)
     return JsonResponse({"threads": threads})
 
+
 @api_view(["GET"])
 def search(request):
     search_string = request.GET.get("search_string")
-    
-    logger.info(json.dumps({
-        "view": "search",
-        "wallet": request.user.wallet if request.user.is_authenticated else None,
-        "username": request.user.username if request.user.is_authenticated else None,
-        "search_string": search_string
-    }))
+
+    logger.info(
+        json.dumps(
+            {
+                "view": "search",
+                "wallet": (
+                    request.user.wallet if request.user.is_authenticated else None
+                ),
+                "username": (
+                    request.user.username if request.user.is_authenticated else None
+                ),
+                "search_string": search_string,
+            }
+        )
+    )
 
     components = search_string.split()
     posts = Post.objects.filter(
-        reduce(operator.or_, (Q(text__icontains=x)  for x in components))
+        reduce(operator.or_, (Q(text__icontains=x) for x in components))
     ).distinct()
     threads = posts.values_list("thread", flat=True)
     th, c = np.unique(threads, return_counts=True)
-    queryset = Thread.objects.filter(pk__in=th) | Thread.objects.filter(
-        topic__icontains=search_string
-    ) | Thread.objects.filter(tag__name__in=components)
+    queryset = (
+        Thread.objects.filter(pk__in=th)
+        | Thread.objects.filter(topic__icontains=search_string)
+        | Thread.objects.filter(tag__name__in=components)
+    )
     queryset = queryset.order_by("-dt")
 
     threads = annotate_threads(queryset)
@@ -540,12 +539,20 @@ def search(request):
 def threadPosts(request):
     threadId = request.query_params.get("threadId")
 
-    logger.info(json.dumps({
-        "view": "threadPosts",
-        "wallet": request.user.wallet if request.user.is_authenticated else None,
-        "username": request.user.username if request.user.is_authenticated else None,
-        "threadId": threadId
-    }))
+    logger.info(
+        json.dumps(
+            {
+                "view": "threadPosts",
+                "wallet": (
+                    request.user.wallet if request.user.is_authenticated else None
+                ),
+                "username": (
+                    request.user.username if request.user.is_authenticated else None
+                ),
+                "threadId": threadId,
+            }
+        )
+    )
 
     response_dict = {}
     queryset = Post.objects.all()
@@ -597,26 +604,26 @@ def threadPosts(request):
     )
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
-    
+
     # Convert queryset to list of dicts and handle bytes serialization
     posts = []
     for post in queryset:
         post_dict = {
-            'id': post.id,
-            'text': post.text,
-            'dt': post.dt,
-            'thread_id': post.thread_id,
-            'poster_name': post.poster_name,
-            'poster_wallet': post.poster_wallet,
-            'asker_address': post.asker_address,
-            'asker_username': post.asker_username,
-            'answer_status': post.answer_status,
-            'question_id': post.question_id,
-            'question_hash': post.question_hash.hex() if post.question_hash else None,
-            'contract_address': post.contract_address,
-            'bounty': post.bounty,
-            'answer_id': post.answer_id,
-            'answer_hash': post.answer_hash.hex() if post.answer_hash else None
+            "id": post.id,
+            "text": post.text,
+            "dt": post.dt,
+            "thread_id": post.thread_id,
+            "poster_name": post.poster_name,
+            "poster_wallet": post.poster_wallet,
+            "asker_address": post.asker_address,
+            "asker_username": post.asker_username,
+            "answer_status": post.answer_status,
+            "question_id": post.question_id,
+            "question_hash": post.question_hash.hex() if post.question_hash else None,
+            "contract_address": post.contract_address,
+            "bounty": post.bounty,
+            "answer_id": post.answer_id,
+            "answer_hash": post.answer_hash.hex() if post.answer_hash else None,
         }
         posts.append(post_dict)
     response_dict["posts"] = posts
