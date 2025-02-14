@@ -28,8 +28,8 @@ facthound_abi = facthound_contract["abi"]
 facthound_bytecode = facthound_contract["bytecode"]["object"]
 
 
-def confirm_question(question):
-    question = Question.objects.get(pk=question)
+def confirm_question(questionHash):
+    question = Question.objects.get(questionHash=questionHash)
     try:
         contract = w3.eth.contract(
             address=question.contractAddress, abi=facthound_abi, decode_tuples=True
@@ -64,11 +64,11 @@ def confirm_question(question):
     question.status = status
     question.confirmed_onchain = True
     question.save()
-    return True, "Success"
+    return True, {"message": "Success", "thread": question.post.thread.pk}
 
 
-def confirm_answer(answer):
-    answer = Answer.objects.get(pk = answer)
+def confirm_answer(questionHash, answerHash):
+    answer = Answer.objects.get(answerHash=answerHash)
     question = answer.question
     try:
         contract = w3.eth.contract(
@@ -105,11 +105,11 @@ def confirm_answer(answer):
     answer.status = status
     answer.confirmed_onchain = confirmed_onchain
     answer.save()
-    return True, "Success"
+    return True, {"message": "Success", "thread": question.post.thread.pk}
 
 
-def confirm_selection(answer):
-    answer = Answer.objects.get(pk = answer)
+def confirm_selection(answerHash, questionHash):
+    answer = Answer.objects.get(answerHash = answerHash)
     question = answer.question
     try:
         contract = w3.eth.contract(
@@ -130,4 +130,4 @@ def confirm_selection(answer):
     answer.status = status
     answer.selection_confirmed_onchain = selection_confirmed_onchain
     answer.save()
-    return True, "Success"
+    return True, {"message": "Success", "thread": question.post.thread.pk}

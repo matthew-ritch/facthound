@@ -414,18 +414,18 @@ def payout(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirm(request):
-    question = request.data.get("question")
-    answer = request.data.get("answer")
+    questionHash = hexbytes.HexBytes(request.data.get("questionHash")) if request.data.get("questionHash") else None
+    answerHash = hexbytes.HexBytes(request.data.get("answerHash")) if request.data.get("answerHash") else None
     type = request.data.get("confirmType")
     match type:
         case "question":
-            success, message = confirm_question(question)
+            success, resp = confirm_question(questionHash)
         case "answer":
-            success, message = confirm_answer(answer)
+            success, resp = confirm_answer(questionHash, answerHash)
         case "selection":
-            success, message = confirm_selection(answer)
+            success, resp = confirm_selection(questionHash, answerHash)
     return JsonResponse(
-            {"message": message}, status=200 if success else 400
+            resp, status=200 if success else 400
         )
     
 
