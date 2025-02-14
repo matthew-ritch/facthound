@@ -255,7 +255,8 @@ class TestSelectionWithContracts(TestCase):
 
         # Add confirmation step
         confirm_dict = {
-            "answer": content["answer"],
+            "questionHash": self.question.questionHash.hex(),
+            "answerHash": self.answer.answerHash.hex(),
             "confirmType": "selection"
         }
         request = self.factory.post(
@@ -280,8 +281,8 @@ class TestSelectionWithContracts(TestCase):
         self.assertEqual(response.status_code, 200)
         # Add confirmation step
         confirm_dict = {
-            "question": content["question"],
-            "answer": content["answer"],
+            "questionHash": self.question.questionHash.hex(),
+            "answerHash": self.answer.answerHash.hex(),
             "confirmType": "selection"
         }
         request = self.factory.post(

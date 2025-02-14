@@ -29,7 +29,10 @@ facthound_bytecode = facthound_contract["bytecode"]["object"]
 
 
 def confirm_question(questionHash):
-    question = Question.objects.get(questionHash=questionHash)
+    try:
+        question = Question.objects.get(questionHash=questionHash)
+    except Answer.DoesNotExist:
+        return False, "Question not found."
     try:
         contract = w3.eth.contract(
             address=question.contractAddress, abi=facthound_abi, decode_tuples=True
@@ -68,8 +71,11 @@ def confirm_question(questionHash):
 
 
 def confirm_answer(questionHash, answerHash):
-    answer = Answer.objects.get(answerHash=answerHash)
-    question = answer.question
+    try:
+        answer = Answer.objects.get(answerHash=answerHash)
+        question = answer.question
+    except Answer.DoesNotExist:
+        return False, "Answer not found."
     try:
         contract = w3.eth.contract(
             address=question.contractAddress, abi=facthound_abi, decode_tuples=True
@@ -108,9 +114,12 @@ def confirm_answer(questionHash, answerHash):
     return True, {"message": "Success", "thread": question.post.thread.pk}
 
 
-def confirm_selection(answerHash, questionHash):
-    answer = Answer.objects.get(answerHash = answerHash)
-    question = answer.question
+def confirm_selection(questionHash, answerHash):
+    try:
+        answer = Answer.objects.get(answerHash=answerHash)
+        question = answer.question
+    except Answer.DoesNotExist:
+        return False, "Answer not found."
     try:
         contract = w3.eth.contract(
             address=question.contractAddress, abi=facthound_abi, decode_tuples=True

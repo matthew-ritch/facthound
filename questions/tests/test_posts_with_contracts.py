@@ -89,14 +89,14 @@ class TestQuestions(BaseTestCase):
         )
         force_authenticate(request, self.asker_user)
         response = views.question(request)
-
-        # Verify response
-        self.assertEqual(response.status_code, 200)
         content = json.loads(response.content)
+
+        # Store question ID for confirmation
+        questionId = content["question"]
 
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
+            "questionHash": questionHash.hex(),
             "confirmType": "question"
         }
         request = self.factory.post(
@@ -105,6 +105,10 @@ class TestQuestions(BaseTestCase):
         force_authenticate(request, self.asker_user)
         response = views.confirm(request)
         self.assertEqual(response.status_code, 200)
+
+        # Verify response
+        self.assertEqual(response.status_code, 200)
+        content = json.loads(response.content)
 
         # Verify database objects
         thread = Thread.objects.get(topic=question_dict["topic"])
@@ -166,9 +170,15 @@ class TestQuestions(BaseTestCase):
             "tags": ["a", "b", "c"],
             "contractAddress": "0xInvalidAddress",
         }
+        
+        # Generate hash for the question
+        questionHash = Web3.solidity_keccak(
+            ["address", "string"], [self.asker, question_dict["text"]]
+        )
+        question_dict["questionHash"] = questionHash.hex()
+
         request = self.factory.post(
-            "/api/question/",
-            question_dict,
+            "/api/question/", data=question_dict, content_type="application/json"
         )
         force_authenticate(request, self.asker_user)
         response = views.question(request)
@@ -176,7 +186,7 @@ class TestQuestions(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
+            "questionHash": question_dict["questionHash"],
             "confirmType": "question"
         }
         request = self.factory.post(
@@ -220,7 +230,7 @@ class TestQuestions(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
+            "questionHash": question_dict["questionHash"],
             "confirmType": "question"
         }
         request = self.factory.post(
@@ -273,7 +283,7 @@ class TestQuestions(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
+            "questionHash": question_dict["questionHash"],
             "confirmType": "question"
         }
         request = self.factory.post(
@@ -368,9 +378,10 @@ class TestAnswers(BaseTestCase):
         response = views.answer(request)
         content = json.loads(response.content)
 
-        # Confirm onchain
+        # Confirm onchain with the actual answer hash
         confirm_dict = {
-            "answer": content["answer"],
+            "questionHash": self.question_hash.hex(),
+            "answerHash": answer_hash.hex(),
             "confirmType": "answer"
         }
         request = self.factory.post(
@@ -447,10 +458,11 @@ class TestAnswers(BaseTestCase):
         response = views.answer(request)
         content = json.loads(response.content)
         self.assertEqual(response.status_code, 200)
-        # Confirm onchain
+        # Confirm onchain - use the actual hash not the answer ID
         confirm_dict = {
-            "question": content["question"],
-            "confirmType": "question"
+            "questionHash": self.question_hash.hex(),
+            "answerHash": answerHash.hex(),
+            "confirmType": "answer"
         }
         request = self.factory.post(
             "/api/confirm/", data=confirm_dict, content_type="application/json"
@@ -535,8 +547,8 @@ class TestAnswers(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
-            "answer": content["answer"],
+            "questionHash": self.question_hash.hex(),
+            "answerHash": answerHash.hex(),
             "confirmType": "answer"
         }
         request = self.factory.post(
@@ -581,8 +593,8 @@ class TestAnswers(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         # Confirm onchain
         confirm_dict = {
-            "question": content["question"],
-            "answer": content["answer"],
+            "questionHash": self.question_hash.hex(),
+            "answerHash": wrongAnswerHash.hex(),
             "confirmType": "answer"
         }
         request = self.factory.post(

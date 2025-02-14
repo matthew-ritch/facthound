@@ -414,8 +414,16 @@ def payout(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirm(request):
-    questionHash = hexbytes.HexBytes(request.data.get("questionHash")) if request.data.get("questionHash") else None
-    answerHash = hexbytes.HexBytes(request.data.get("answerHash")) if request.data.get("answerHash") else None
+    questionHash = (
+        hexbytes.HexBytes(request.data.get("questionHash"))
+        if request.data.get("questionHash")
+        else None
+    )
+    answerHash = (
+        hexbytes.HexBytes(request.data.get("answerHash"))
+        if request.data.get("answerHash")
+        else None
+    )
     type = request.data.get("confirmType")
     match type:
         case "question":
@@ -424,10 +432,12 @@ def confirm(request):
             success, resp = confirm_answer(questionHash, answerHash)
         case "selection":
             success, resp = confirm_selection(questionHash, answerHash)
-    return JsonResponse(
-            resp, status=200 if success else 400
-        )
-    
+
+    if not isinstance(resp, dict):
+        resp = {"message": resp}
+
+    return JsonResponse(resp, status=200 if success else 400)
+
 
 def annotate_threads(queryset):
     queryset = queryset.annotate(
