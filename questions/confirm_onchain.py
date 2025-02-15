@@ -132,11 +132,12 @@ def confirm_selection(questionHash, answerHash):
     questionStruct = contract.caller.getQuestion(question.questionHash)
     selectedAnswer = questionStruct.selectedAnswer
     if selectedAnswer != answer.answerHash:
+        answer.status = "UN"
+        answer.selection_confirmed_onchain = False
+        answer.save()
         return False, f"This answer must be selected in the contract at address {question.contractAddress}."
-    status = "SE" if hexbytes.HexBytes(answer.answerHash).hex() == questionStruct.selectedAnswer.hex() else "UN"
     selection_confirmed_onchain = True
     # passed. update
-    answer.status = status
     answer.selection_confirmed_onchain = selection_confirmed_onchain
     answer.save()
     return True, {"message": "Success", "thread": question.post.thread.pk}
