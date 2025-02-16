@@ -19,7 +19,6 @@ urlpatterns = [
     path("answer/", views.answer, name="answer"),
     path("selection/", views.selection, name="selection"),
     path("confirm/", views.confirm, name="confirm"),
-    path("payout/", views.payout, name="payout"),
     path("search/", views.search, name="search"),
     path("thread/", views.threadPosts, name="threadposts"),
     path("threadlist/", views.threadList, name="threadlist"),
