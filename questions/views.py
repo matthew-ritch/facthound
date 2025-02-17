@@ -574,6 +574,89 @@ def threadPosts(request):
     return JsonResponse(response_dict)
 
 
+@api_view(["GET"])
+def userHistory(request):
+
+    user_pk = request.query_params.get("user")
+
+    logger.info(
+        json.dumps(
+            {
+                "view": "userStats",
+                "requester_user": (
+                    request.user.pk if request.user.is_authenticated else None
+                ),
+                "requested_user": user_pk,
+            }
+        )
+    )
+
+    if not user_pk:
+        return JsonResponse({"message": "User pk is required"}, status=400)
+
+    try:
+        user = User.objects.get(pk=user_pk)
+    except User.DoesNotExist:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    # Get all questions and answers
+    questions = Question.objects.filter(asker=user).order_by("-post__dt")
+    answers = Answer.objects.filter(answerer=user).order_by("-post__dt")
+
+    questions_data = [
+        {
+            "id": q.post.id,
+            "text": q.post.text,
+            "dt": q.post.dt,
+            "thread_id": q.post.thread.id,
+            "poster_name": q.post.poster.username,
+            "poster_wallet": q.post.poster.wallet,
+            "asker_address": q.asker.wallet,
+            "asker_username": q.asker.username,
+            "answer_status": None,
+            "question_id": q.id,
+            "question_hash": q.questionHash.hex() if q.questionHash else None,
+            "contract_address": q.contractAddress,
+            "bounty": q.bounty,
+            "answer_id": None,
+            "answer_hash": None,
+        }
+        for q in questions
+    ]
+
+    answers_data = [
+        {
+            "id": a.post.id,
+            "text": a.post.text,
+            "dt": a.post.dt,
+            "thread_id": a.post.thread.id,
+            "poster_name": a.post.poster.username,
+            "poster_wallet": a.post.poster.wallet,
+            "asker_address": a.question.asker.wallet,
+            "asker_username": a.question.asker.username,
+            "answer_status": a.status,
+            "question_id": a.question.id,
+            "question_hash": a.question.questionHash.hex() if a.question.questionHash else None,
+            "contract_address": a.question.contractAddress,
+            "bounty": a.question.bounty,
+            "answer_id": a.id,
+            "answer_hash": a.answerHash.hex() if a.answerHash else None,
+            "thread_topic": a.post.thread.topic,
+        }
+        for a in answers
+    ]
+
+    return JsonResponse(
+        {
+            "userid": user.pk,
+            "username": user.username,
+            "wallet": user.wallet,
+            "questions": questions_data,
+            "answers": answers_data,
+        }
+    )
+
+
 # viewsets for simple crud.
 
 

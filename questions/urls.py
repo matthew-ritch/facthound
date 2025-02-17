@@ -22,4 +22,5 @@ urlpatterns = [
     path("search/", views.search, name="search"),
     path("thread/", views.threadPosts, name="threadposts"),
     path("threadlist/", views.threadList, name="threadlist"),
+    path('userhistory/', views.userHistory, name='userhistory'),
 ]
