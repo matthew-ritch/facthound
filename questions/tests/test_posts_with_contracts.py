@@ -57,7 +57,7 @@ class TestQuestions(BaseTestCase):
         abi = self.facthound_contract["abi"]
         bytecode = self.facthound_contract["bytecode"]["object"]
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
+        tx_hash = Contract.constructor(100).transact({"from": self.owner})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         self.contract_address = tx_receipt["contractAddress"]
         self.contract = self.w3.eth.contract(
@@ -209,7 +209,7 @@ class TestQuestions(BaseTestCase):
         abi = self.facthound_contract["abi"]
         bytecode = self.facthound_contract["bytecode"]["object"]
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode, decode_tuples=True)
-        tx_hash = Contract.constructor(self.oracle, 100).transact(
+        tx_hash = Contract.constructor(100).transact(
             {"from": self.oracle}
         )  # Different owner
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
@@ -250,11 +250,11 @@ class TestQuestions(BaseTestCase):
             "tags": ["a", "b", "c"],
         }
 
-        # Deploy contract with oracle
+        # Deploy contract
         abi = self.facthound_contract["abi"]
         bytecode = self.facthound_contract["bytecode"]["object"]
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
+        tx_hash = Contract.constructor(100).transact({"from": self.owner})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
 
         # Create question with incorrect text
@@ -315,7 +315,7 @@ class TestAnswers(BaseTestCase):
         abi = self.facthound_contract["abi"]
         bytecode = self.facthound_contract["bytecode"]["object"]
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
+        tx_hash = Contract.constructor(100).transact({"from": self.owner})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         self.contract_address = tx_receipt["contractAddress"]
         self.contract = self.w3.eth.contract(

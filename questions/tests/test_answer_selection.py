@@ -178,7 +178,7 @@ class TestSelectionWithContracts(TestCase):
         abi = facthound_contract["abi"]
         bytecode = facthound_contract["bytecode"]["object"]
         Contract = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        tx_hash = Contract.constructor(self.oracle, 100).transact({"from": self.owner})
+        tx_hash = Contract.constructor(100).transact({"from": self.owner})
         tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         self.contract_address = tx_receipt["contractAddress"]
         self.contract = self.w3.eth.contract(
@@ -296,23 +296,3 @@ class TestSelectionWithContracts(TestCase):
             content["message"],
             f"This answer must be selected in the contract at address {self.question.contractAddress}.",
         )
-
-    def test_oracle_can_select(self):
-        # Oracle selects answer in contract
-        tx_hash = self.contract.functions.selectAnswer(
-            self.question_hash, self.answer_hash
-        ).transact({"from": self.oracle})
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-
-        # Oracle selects in backend
-        oracle_user = User.objects.create_user_address(self.oracle)
-        selection_dict = {"question": self.question.pk, "answer": self.answer.pk}
-        request = self.factory.post("/api/selection/", selection_dict)
-        force_authenticate(request, oracle_user)
-        response = views.selection(request)
-
-        self.assertEqual(response.status_code, 200)
-        question = Question.objects.get(pk=self.question.pk)
-        answer = Answer.objects.get(pk=self.answer.pk)
-        self.assertEqual(question.status, "AS")
-        self.assertEqual(answer.status, "SE")

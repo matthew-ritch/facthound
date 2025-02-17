@@ -347,72 +347,6 @@ def selection(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def payout(request):
-    question = request.data.get("question")
-    answer = request.data.get("answer")
-
-    logger.info(
-        json.dumps(
-            {
-                "view": "payout",
-                "wallet": request.user.wallet,
-                "username": request.user.username,
-                "question": question,
-                "answer": answer,
-            }
-        )
-    )
-
-    try:
-        question = Question.objects.get(pk=question)
-    except Question.DoesNotExist:
-        return JsonResponse({"message": "No question with that id exists."}, status=400)
-    try:
-        answer = Answer.objects.get(pk=answer)
-    except Answer.DoesNotExist:
-        return JsonResponse({"message": "No answer with that id exists."}, status=400)
-
-    if answer.question != question:
-        return JsonResponse(
-            {"message": "This answer does not answer this question."}, status=400
-        )
-
-    if not question.contractAddress or not answer.answerHash:
-        return JsonResponse(
-            {"message": "This is not an on-chain question/answer pair."}, status=400
-        )
-
-    # Verify contract state
-    contract = w3.eth.contract(
-        address=question.contractAddress, abi=facthound_abi, decode_tuples=True
-    )
-    selected_answer = contract.caller.getQuestion(
-        question.questionHash
-    ).selectedAnswer()
-
-    if selected_answer != answer.answerHash:
-        return JsonResponse(
-            {"message": "This answer is not selected in the contract."}, status=400
-        )
-
-    # Update statuses
-    question.status = "RS"  # Resolved
-    answer.status = "PO"  # Paid out
-
-    question.save()
-    answer.save()
-
-    return JsonResponse(
-        {
-            "message": "payout processed",
-            "question": question.pk,
-            "answer": answer.pk,
-        }
-    )
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
 def confirm(request):
     questionHash = (
         hexbytes.HexBytes(request.data.get("questionHash"))
@@ -612,6 +546,12 @@ def threadPosts(request):
     queryset = queryset.annotate(
         answer_status=F("answer__status"),
     )
+    queryset = queryset.annotate(
+        question_status=Case(
+            When(question__isnull=True, then=F("answer__question__status")),
+            default=F("question__status"),
+        )
+    )
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
 
@@ -624,10 +564,12 @@ def threadPosts(request):
             "dt": post.dt,
             "thread_id": post.thread_id,
             "poster_name": post.poster_name,
+            "poster_id": post.poster.pk,
             "poster_wallet": post.poster_wallet,
             "asker_address": post.asker_address,
             "asker_username": post.asker_username,
             "answer_status": post.answer_status,
+            "question_status" : post.question_status,
             "question_id": post.question_id,
             "question_hash": post.question_hash.hex() if post.question_hash else None,
             "contract_address": post.contract_address,
@@ -638,6 +580,93 @@ def threadPosts(request):
         posts.append(post_dict)
     response_dict["posts"] = posts
     return JsonResponse(response_dict)
+
+
+@api_view(["GET"])
+def userHistory(request):
+
+    user_pk = request.query_params.get("user")
+
+    logger.info(
+        json.dumps(
+            {
+                "view": "userStats",
+                "requester_user": (
+                    request.user.pk if request.user.is_authenticated else None
+                ),
+                "requested_user": user_pk,
+            }
+        )
+    )
+
+    if not user_pk:
+        return JsonResponse({"message": "User pk is required"}, status=400)
+
+    try:
+        user = User.objects.get(pk=user_pk)
+    except User.DoesNotExist:
+        return JsonResponse({"message": "User not found"}, status=404)
+
+    # Get all questions and answers
+    questions = Question.objects.filter(asker=user).order_by("-post__dt")
+    answers = Answer.objects.filter(answerer=user).order_by("-post__dt")
+
+    questions_data = [
+        {
+            "id": q.post.id,
+            "text": q.post.text,
+            "dt": q.post.dt,
+            "thread_id": q.post.thread.id,
+            "poster_id": q.post.poster.pk,
+            "poster_name": q.post.poster.username,
+            "poster_wallet": q.post.poster.wallet,
+            "asker_address": q.asker.wallet,
+            "asker_username": q.asker.username,
+            "answer_status": None,
+            "question_status" : q.status,
+            "question_id": q.id,
+            "question_hash": q.questionHash.hex() if q.questionHash else None,
+            "contract_address": q.contractAddress,
+            "bounty": q.bounty,
+            "answer_id": None,
+            "answer_hash": None,
+        }
+        for q in questions
+    ]
+
+    answers_data = [
+        {
+            "id": a.post.id,
+            "text": a.post.text,
+            "dt": a.post.dt,
+            "thread_id": a.post.thread.id,
+            "poster_name": a.post.poster.username,
+            "poster_id": a.post.poster.pk,
+            "poster_wallet": a.post.poster.wallet,
+            "asker_address": a.question.asker.wallet,
+            "asker_username": a.question.asker.username,
+            "answer_status": a.status,
+            "question_status" : a.question.status,
+            "question_id": a.question.id,
+            "question_hash": a.question.questionHash.hex() if a.question.questionHash else None,
+            "contract_address": a.question.contractAddress,
+            "bounty": a.question.bounty,
+            "answer_id": a.id,
+            "answer_hash": a.answerHash.hex() if a.answerHash else None,
+            "thread_topic": a.post.thread.topic,
+        }
+        for a in answers
+    ]
+
+    return JsonResponse(
+        {
+            "userid": user.pk,
+            "username": user.username,
+            "wallet": user.wallet,
+            "questions": questions_data,
+            "answers": answers_data,
+        }
+    )
 
 
 # viewsets for simple crud.
