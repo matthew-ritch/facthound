@@ -546,6 +546,12 @@ def threadPosts(request):
     queryset = queryset.annotate(
         answer_status=F("answer__status"),
     )
+    queryset = queryset.annotate(
+        question_status=Case(
+            When(question__isnull=True, then=F("answer__question__status")),
+            default=F("question__status"),
+        )
+    )
     queryset = queryset.annotate(answer_id=F("answer"))
     queryset = queryset.annotate(answer_hash=F("answer__answerHash"))
 
@@ -563,6 +569,7 @@ def threadPosts(request):
             "asker_address": post.asker_address,
             "asker_username": post.asker_username,
             "answer_status": post.answer_status,
+            "question_status" : post.question_status,
             "question_id": post.question_id,
             "question_hash": post.question_hash.hex() if post.question_hash else None,
             "contract_address": post.contract_address,
@@ -616,6 +623,7 @@ def userHistory(request):
             "asker_address": q.asker.wallet,
             "asker_username": q.asker.username,
             "answer_status": None,
+            "question_status" : q.status,
             "question_id": q.id,
             "question_hash": q.questionHash.hex() if q.questionHash else None,
             "contract_address": q.contractAddress,
@@ -638,6 +646,7 @@ def userHistory(request):
             "asker_address": a.question.asker.wallet,
             "asker_username": a.question.asker.username,
             "answer_status": a.status,
+            "question_status" : a.question.status,
             "question_id": a.question.id,
             "question_hash": a.question.questionHash.hex() if a.question.questionHash else None,
             "contract_address": a.question.contractAddress,
