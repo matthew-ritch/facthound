@@ -1,3 +1,11 @@
+"""
+Blockchain verification utilities for the questions app.
+
+This module provides functions to verify and synchronize on-chain data with the database.
+It handles confirmation of questions, answers, and answer selections by checking the 
+FactHound contract's state on-chain and updating the corresponding database objects accordingly.
+"""
+
 import os
 from web3 import Web3
 import json
@@ -29,9 +37,27 @@ facthound_bytecode = facthound_contract["bytecode"]["object"]
 
 
 def confirm_question(questionHash):
+    """
+    Confirm a question's on-chain status and update local database accordingly.
+    
+    This function verifies that a question exists on-chain with the provided hash,
+    checks the contract ownership, and updates the database record with on-chain data.
+    
+    Args:
+        questionHash (hexbytes.HexBytes): The hash of the question to confirm
+        
+    Returns:
+        tuple: (success_bool, response_message_or_dict)
+            - success_bool: True if confirmation succeeded, False otherwise
+            - response_message_or_dict: Success message/data or error message
+            
+    Note:
+        This updates the question's status, asker, bounty, and confirmed_onchain flag
+        in the database if successful.
+    """
     try:
         question = Question.objects.get(questionHash=questionHash)
-    except Answer.DoesNotExist:
+    except Question.DoesNotExist:
         return False, "Question not found."
     try:
         contract = w3.eth.contract(
@@ -71,6 +97,26 @@ def confirm_question(questionHash):
 
 
 def confirm_answer(questionHash, answerHash):
+    """
+    Confirm an answer's on-chain status and update local database accordingly.
+    
+    This function verifies that an answer exists on-chain with the provided hash,
+    checks the contract ownership, verifies the answer hash matches the expected value,
+    and updates the database record with on-chain data.
+    
+    Args:
+        questionHash (hexbytes.HexBytes): The hash of the question being answered
+        answerHash (hexbytes.HexBytes): The hash of the answer to confirm
+        
+    Returns:
+        tuple: (success_bool, response_message_or_dict)
+            - success_bool: True if confirmation succeeded, False otherwise
+            - response_message_or_dict: Success message/data or error message
+            
+    Note:
+        This updates the answer's status, answerer, and confirmed_onchain flag
+        in the database if successful.
+    """
     try:
         answer = Answer.objects.get(answerHash=answerHash)
         question = answer.question
@@ -115,6 +161,25 @@ def confirm_answer(questionHash, answerHash):
 
 
 def confirm_selection(questionHash, answerHash):
+    """
+    Confirm an answer selection's on-chain status and update local database accordingly.
+    
+    This function verifies that an answer has been selected on-chain for the given question,
+    and updates the database record with the selection status.
+    
+    Args:
+        questionHash (hexbytes.HexBytes): The hash of the question
+        answerHash (hexbytes.HexBytes): The hash of the answer to confirm selection
+        
+    Returns:
+        tuple: (success_bool, response_message_or_dict)
+            - success_bool: True if confirmation succeeded, False otherwise
+            - response_message_or_dict: Success message/data or error message
+            
+    Note:
+        This updates the answer's selection_confirmed_onchain flag and status
+        in the database if successful.
+    """
     try:
         answer = Answer.objects.get(answerHash=answerHash)
         question = answer.question

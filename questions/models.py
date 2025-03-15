@@ -1,3 +1,11 @@
+"""
+Database models for the questions app.
+
+This module defines the database schema for threads, posts, questions, answers, and tags
+in the Facthound platform. Models include blockchain integration fields for on-chain
+verification of questions, answers, and selections.
+"""
+
 from django.db import models
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
@@ -10,6 +18,12 @@ from siweauth.models import validate_ethereum_address, User
 
 
 class Thread(models.Model):
+    """
+    A thread represents a topic of discussion containing multiple posts.
+    
+    A thread is the top-level container for a conversation, with posts attached to it.
+    Threads have a topic and can be tagged for categorization.
+    """
     topic = models.CharField(max_length=1000)
     dt = models.DateTimeField()
 
@@ -18,6 +32,11 @@ class Thread(models.Model):
 
 
 class Post(models.Model):
+    """
+    A post is a message within a thread.
+    
+    Posts are the individual messages in a thread. Each post is linked to a thread and a user.
+    """
     thread = models.ForeignKey(Thread, on_delete=models.CASCADE)
     text = models.TextField()
     dt = models.DateTimeField()
@@ -28,6 +47,12 @@ class Post(models.Model):
 
 
 class Question(models.Model):
+    """
+    A question is a post that seeks an answer.
+    
+    Questions are linked to posts and have additional fields for EVM blockchain integration,
+    such as contract address, bounty, and status.
+    """
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     questionHash = models.BinaryField(null=True)
     contractAddress = models.CharField(
@@ -57,6 +82,12 @@ class Question(models.Model):
 
 
 class Answer(models.Model):
+    """
+    An answer is a response to a question.
+    
+    Answers are linked to questions and posts, and have additional fields for blockchain
+    integration, such as answer hash, status, and on-chain confirmation.
+    """
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     answerHash = models.BinaryField(unique=True, null=True)
@@ -78,6 +109,11 @@ class Answer(models.Model):
 
 
 class Tag(models.Model):
+    """
+    A tag is a label for categorizing threads.
+    
+    Tags are used to categorize threads and make them easier to find.
+    """
     name = models.CharField(max_length=100)
     thread = models.ManyToManyField(Thread)
 

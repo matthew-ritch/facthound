@@ -1,3 +1,11 @@
+"""
+Views for the questions app.
+
+This module contains the API endpoints and viewsets for handling threads, posts, 
+questions, and answers in the Facthound platform, including both on-chain and off-chain
+functionality for creating and managing questions, answers, and selections.
+"""
+
 from django.http import JsonResponse
 from django.db.models import (
     Case,
@@ -61,6 +69,24 @@ facthound_bytecode = facthound_contract["bytecode"]["object"]
 
 # endpoints for making posts, threads, q + a
 def _make_post(user, text, thread=None, topic=None, tags=None):
+    """
+    Create a new post with the given parameters.
+    
+    This helper function creates either a new thread with a post or adds a post to an existing thread.
+    
+    Args:
+        user: The user creating the post
+        text: The content of the post
+        thread: Optional existing thread ID to post in
+        topic: Optional topic for a new thread
+        tags: Optional list of tags for the thread
+        
+    Returns:
+        Post: The newly created post object
+        
+    Raises:
+        AssertionError: If both thread and topic are None or both are provided
+    """
     now = datetime.datetime.now(tz=pytz.UTC)
     # make thread if neeeded, else get it
     assert (thread is None) ^ (topic is None)  # xor
@@ -79,6 +105,27 @@ def _make_post(user, text, thread=None, topic=None, tags=None):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def post(request):
+    """
+    Create a new post in an existing or new thread.
+    
+    Endpoint: POST /api/post/
+    
+    Args:
+        request: HTTP request containing thread or topic, and text
+        
+    Request Data:
+        thread: Optional ID of existing thread
+        topic: Optional topic for new thread
+        text: Content of the post
+        tags: Optional list of tags for the thread
+        
+    Returns:
+        JsonResponse: Success message with thread and post IDs
+        
+    Status Codes:
+        200: Success
+        400: Bad request (missing or invalid parameters)
+    """
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
@@ -122,6 +169,29 @@ def post(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def question(request):
+    """
+    Create a new question post, optionally with blockchain integration.
+    
+    Endpoint: POST /api/question/
+    
+    Args:
+        request: HTTP request containing question data
+        
+    Request Data:
+        thread: Optional ID of existing thread
+        topic: Optional topic for new thread
+        text: Content of the question
+        tags: Optional list of tags for the thread
+        contractAddress: Optional blockchain contract address
+        questionHash: Optional hash of the question for blockchain verification
+        
+    Returns:
+        JsonResponse: Success message with thread, post, and question IDs
+        
+    Status Codes:
+        200: Success
+        400: Bad request (missing or invalid parameters)
+    """
     thread = request.data.get("thread")
     topic = request.data.get("topic")
     text = request.data.get("text")
@@ -192,6 +262,29 @@ def question(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def answer(request):
+    """
+    Create a new answer to an existing question, optionally with blockchain integration.
+    
+    Endpoint: POST /api/answer/
+    
+    Args:
+        request: HTTP request containing answer data
+        
+    Request Data:
+        thread: ID of existing thread
+        text: Content of the answer
+        question: ID of the question being answered
+        contractAddress: Optional blockchain contract address
+        questionHash: Optional hash of the question for blockchain verification
+        answerHash: Optional hash of the answer for blockchain verification
+        
+    Returns:
+        JsonResponse: Success message with thread, post, question, and answer IDs
+        
+    Status Codes:
+        200: Success
+        400: Bad request (missing or invalid parameters)
+    """
     thread = request.data.get("thread")
     text = request.data.get("text")
     question = request.data.get("question")
@@ -292,6 +385,25 @@ def answer(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def selection(request):
+    """
+    Select an answer as the accepted solution for a question.
+    
+    Endpoint: POST /api/selection/
+    
+    Args:
+        request: HTTP request containing selection data
+        
+    Request Data:
+        question: ID of the question
+        answer: ID of the answer being selected
+        
+    Returns:
+        JsonResponse: Success message with question and answer IDs
+        
+    Status Codes:
+        200: Success
+        400: Bad request (missing or invalid parameters)
+    """
     question = request.data.get("question")
     answer = request.data.get("answer")
 
@@ -348,6 +460,26 @@ def selection(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def confirm(request):
+    """
+    Confirm on-chain status of a question, answer, or selection.
+    
+    Endpoint: POST /api/confirm/
+    
+    Args:
+        request: HTTP request containing confirmation data
+        
+    Request Data:
+        questionHash: Hash of the question
+        answerHash: Optional hash of the answer
+        confirmType: Type of confirmation ('question', 'answer', or 'selection')
+        
+    Returns:
+        JsonResponse: Success message or error details
+        
+    Status Codes:
+        200: Success
+        400: Failed confirmation
+    """
     questionHash = (
         hexbytes.HexBytes(request.data.get("questionHash"))
         if request.data.get("questionHash")
@@ -374,6 +506,18 @@ def confirm(request):
 
 
 def annotate_threads(queryset):
+    """
+    Annotate thread queryset with additional information.
+    
+    This helper function adds first poster details, bounty totals, and tag information 
+    to thread objects.
+    
+    Args:
+        queryset: A queryset of Thread objects
+        
+    Returns:
+        list: List of dictionaries representing the annotated threads
+    """
     queryset = queryset.annotate(
         first_poster_wallet=Subquery(
             Post.objects.filter(thread=OuterRef("pk"))
@@ -421,9 +565,19 @@ def annotate_threads(queryset):
     return threads_with_annotations
 
 
-# Update the view functions to handle the new return type
 @api_view(["GET"])
 def threadList(request):
+    """
+    List all threads with annotations.
+    
+    Endpoint: GET /api/thread-list/
+    
+    Args:
+        request: HTTP request
+        
+    Returns:
+        JsonResponse: List of all threads with annotations
+    """
     logger.info(
         json.dumps(
             {
@@ -445,6 +599,20 @@ def threadList(request):
 
 @api_view(["GET"])
 def search(request):
+    """
+    Search for threads by text content or tags.
+    
+    Endpoint: GET /api/search/
+    
+    Args:
+        request: HTTP request containing search parameters
+        
+    Request Parameters:
+        search_string: The text to search for in posts, thread topics, or tags
+        
+    Returns:
+        JsonResponse: List of matching threads with annotations
+    """
     search_string = request.GET.get("search_string")
 
     logger.info(
@@ -481,6 +649,24 @@ def search(request):
 
 @api_view(["GET"])
 def threadPosts(request):
+    """
+    Get all posts for a specific thread with additional details.
+    
+    Endpoint: GET /api/thread-posts/
+    
+    Args:
+        request: HTTP request containing thread ID
+        
+    Request Parameters:
+        threadId: ID of the thread to retrieve posts for
+        
+    Returns:
+        JsonResponse: Thread topic and list of posts with additional details
+        
+    Status Codes:
+        200: Success
+        404: Thread not found
+    """
     threadId = request.query_params.get("threadId")
 
     logger.info(
@@ -584,7 +770,25 @@ def threadPosts(request):
 
 @api_view(["GET"])
 def userHistory(request):
-
+    """
+    Get a user's question and answer history.
+    
+    Endpoint: GET /api/user-history/
+    
+    Args:
+        request: HTTP request containing user ID
+        
+    Request Parameters:
+        user: ID of the user to get history for
+        
+    Returns:
+        JsonResponse: User information with lists of questions and answers
+        
+    Status Codes:
+        200: Success
+        400: Missing user ID
+        404: User not found
+    """
     user_pk = request.query_params.get("user")
 
     logger.info(
@@ -675,6 +879,9 @@ def userHistory(request):
 class ThreadViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Thread objects to be viewed or edited.
+    
+    Provides standard CRUD operations for Thread objects.
+    Only admin users can modify threads; others have read-only access.
     """
 
     queryset = Thread.objects.all().order_by("-dt")
@@ -685,6 +892,9 @@ class ThreadViewSet(viewsets.ModelViewSet):
 class PostViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Post objects to be viewed or edited.
+    
+    Provides standard CRUD operations for Post objects.
+    Only admin users can modify posts; others have read-only access.
     """
 
     queryset = Post.objects.all().order_by("-dt")
@@ -695,6 +905,9 @@ class PostViewSet(viewsets.ModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Question objects to be viewed or edited.
+    
+    Provides standard CRUD operations for Question objects.
+    Only admin users can modify questions; others have read-only access.
     """
 
     queryset = Question.objects.all().order_by("-post__dt")
@@ -705,6 +918,9 @@ class QuestionViewSet(viewsets.ModelViewSet):
 class AnswerViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Answer objects to be viewed or edited.
+    
+    Provides standard CRUD operations for Answer objects.
+    Only admin users can modify answers; others have read-only access.
     """
 
     queryset = Answer.objects.all().order_by("-post__dt")
@@ -715,6 +931,9 @@ class AnswerViewSet(viewsets.ModelViewSet):
 class TagViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows Tag objects to be viewed or edited.
+    
+    Provides standard CRUD operations for Tag objects.
+    Only admin users can modify tags; others have read-only access.
     """
 
     queryset = Tag.objects.all().order_by("name")
